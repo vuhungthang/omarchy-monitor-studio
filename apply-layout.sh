@@ -89,6 +89,7 @@ persist_state() {
 
 restore_layout() {
   local saved monitors workspaces
+  has_pending_transaction && return 0
   [[ -r $layout_file ]] || return 0
   saved=$(<"$layout_file")
   monitors=$(jq -c '.monitors' <<<"$saved") || return 2
@@ -104,9 +105,57 @@ restore_layout() {
 cleanup_transaction() {
   local transaction_dir="$1"
   rm -f "$transaction_dir/proposed.json" "$transaction_dir/previous.json" \
-    "$transaction_dir/workspaces.json"
+    "$transaction_dir/workspaces.json" "$transaction_dir/expires-at" \
+    "$transaction_dir/scope"
   rmdir "$transaction_dir/claim" 2>/dev/null || true
   rmdir "$transaction_dir" 2>/dev/null || true
+}
+
+transaction_is_pending() {
+  local transaction_dir="$1"
+  [[ -d $transaction_dir && ! -e $transaction_dir/claim \
+    && -f $transaction_dir/proposed.json \
+    && -f $transaction_dir/previous.json \
+    && -f $transaction_dir/workspaces.json \
+    && -f $transaction_dir/expires-at \
+    && -f $transaction_dir/scope ]]
+}
+
+has_pending_transaction() {
+  local transaction_dir
+  for transaction_dir in "$runtime_root"/*; do
+    transaction_is_pending "$transaction_dir" && return 0
+  done
+  return 1
+}
+
+pending_transaction() {
+  local transaction_dir transaction_id expires_at scope now remaining
+  local best_id="" best_scope="" best_expiry=0
+
+  now=$(date +%s)
+  for transaction_dir in "$runtime_root"/*; do
+    transaction_is_pending "$transaction_dir" || continue
+    transaction_id=${transaction_dir##*/}
+    validate_id "$transaction_id" || continue
+    expires_at=$(<"$transaction_dir/expires-at")
+    scope=$(<"$transaction_dir/scope")
+    [[ $expires_at =~ ^[0-9]+$ && $scope =~ ^(layout|settings)$ ]] || continue
+    (( expires_at > now && expires_at > best_expiry )) || continue
+    best_id=$transaction_id
+    best_scope=$scope
+    best_expiry=$expires_at
+  done
+
+  if [[ -z $best_id ]]; then
+    printf '{}\n'
+    return
+  fi
+
+  remaining=$((best_expiry - now))
+  jq -cn --arg id "$best_id" --arg scope "$best_scope" \
+    --argjson remainingSeconds "$remaining" \
+    '{id: $id, scope: $scope, remainingSeconds: $remainingSeconds}'
 }
 
 claim_transaction() {
@@ -118,8 +167,11 @@ preview_layout() {
   local proposed="$2"
   local previous="$3"
   local workspaces="$4"
+  local scope="${5:-layout}"
+  local duration="${LAYOUT_CONFIRM_SECONDS:-15}"
   local transaction_dir="$runtime_root/$transaction_id"
 
+  [[ $scope =~ ^(layout|settings)$ && $duration =~ ^[0-9]+$ ]] || return 2
   validate_payload "$proposed" && validate_payload "$previous" \
     && validate_workspace_payload "$workspaces" || {
     echo "Invalid display layout" >&2
@@ -136,11 +188,13 @@ preview_layout() {
   printf '%s\n' "$proposed" >"$transaction_dir/proposed.json"
   printf '%s\n' "$previous" >"$transaction_dir/previous.json"
   printf '%s\n' "$workspaces" >"$transaction_dir/workspaces.json"
+  printf '%s\n' "$(( $(date +%s) + duration ))" >"$transaction_dir/expires-at"
+  printf '%s\n' "$scope" >"$transaction_dir/scope"
   apply_payload "$proposed"
   trap - RETURN
 
   if [[ ${LAYOUT_WATCHDOG_DISABLED:-0} != 1 ]]; then
-    setsid -f bash "$script_path" watchdog "$transaction_id" "${LAYOUT_CONFIRM_SECONDS:-15}" \
+    setsid -f bash "$script_path" watchdog "$transaction_id" "$duration" \
       >/dev/null 2>&1
   fi
 }
@@ -197,10 +251,10 @@ command=${1:-}
 
 case "$command" in
   preview)
-    (( $# == 5 )) || exit 2
+    (( $# == 5 || $# == 6 )) || exit 2
     transaction_id=${2:-}
     validate_id "$transaction_id" || exit 2
-    preview_layout "$transaction_id" "$3" "$4" "$5"
+    preview_layout "$transaction_id" "$3" "$4" "$5" "${6:-layout}"
     ;;
   keep)
     (( $# == 2 )) || exit 2
@@ -226,12 +280,16 @@ case "$command" in
     (( $# == 1 )) || exit 2
     restore_layout
     ;;
+  pending)
+    (( $# == 1 )) || exit 2
+    pending_transaction
+    ;;
   save-workspaces)
     (( $# == 3 )) || exit 2
     save_workspace_layout "$2" "$3"
     ;;
   *)
-    echo "Usage: apply-layout.sh preview ID PROPOSED_JSON PREVIOUS_JSON WORKSPACES_JSON | keep ID | revert ID | restore | save-workspaces MONITORS_JSON WORKSPACES_JSON" >&2
+    echo "Usage: apply-layout.sh preview ID PROPOSED_JSON PREVIOUS_JSON WORKSPACES_JSON [SCOPE] | keep ID | revert ID | restore | pending | save-workspaces MONITORS_JSON WORKSPACES_JSON" >&2
     exit 2
     ;;
 esac

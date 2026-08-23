@@ -25,12 +25,29 @@ run_layout() {
 }
 
 # Preview changes the live layout but does not persist it.
-run_layout preview keep-test "$proposed" "$previous" "$workspaces"
+run_layout preview keep-test "$proposed" "$previous" "$workspaces" settings
 grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "0x120", scale = 1 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "1920x0", scale = 2 })' "$test_root/hyprctl.log"
 ! grep -F -- 'keyword monitor' "$test_root/hyprctl.log"
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
 test -f "$test_root/runtime/omarchy-monitor-studio/keep-test/proposed.json"
 test -f "$test_root/runtime/omarchy-monitor-studio/keep-test/previous.json"
+
+# A replacement panel can recover the pending confirmation after an output
+# mode change recreates Quickshell's per-screen bar instance.
+pending=$(run_layout pending)
+jq -e '
+  .id == "keep-test" and
+  .scope == "settings" and
+  (.remainingSeconds | type == "number") and
+  .remainingSeconds >= 0 and .remainingSeconds <= 15
+' <<<"$pending" >/dev/null
+
+# Recreating the widget also invokes restore. It must not overwrite a live
+# preview with the previously kept layout while confirmation is pending.
+eval_count_before_restore=$(grep -c '^eval ' "$test_root/hyprctl.log")
+run_layout restore
+eval_count_after_restore=$(grep -c '^eval ' "$test_root/hyprctl.log")
+test "$eval_count_before_restore" -eq "$eval_count_after_restore"
 
 # Keep persists the proposed layout without requiring edits to Hyprland config.
 run_layout keep keep-test
