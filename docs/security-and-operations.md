@@ -42,6 +42,7 @@ configuration, or package-owned files.
 - Width and height are positive integers capped at `32768`.
 - Refresh rates must be positive and no greater than `1000`.
 - Scale must be within `0.5..4`.
+- Display transforms must be integers within Hyprland's supported `0..7` range.
 - Workspace keys are limited to `1..10` and values use the monitor-identifier
   allowlist.
 - Transaction identifiers use the same conservative identifier allowlist.

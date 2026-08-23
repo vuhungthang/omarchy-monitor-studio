@@ -10,8 +10,8 @@ printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"$HYPRCTL_LOG"\n[[ ${HYPRCTL_FAIL_RE
 chmod +x "$test_root/bin/hyprctl"
 
 script="$(dirname "$0")/../apply-layout.sh"
-proposed='[{"name":"DP-1","x":0,"y":120,"width":1920,"height":1080,"refreshRate":59.95,"scale":1},{"name":"eDP-1","x":1920,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2}]'
-previous='[{"name":"DP-1","x":1440,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1},{"name":"eDP-1","x":0,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2}]'
+proposed='[{"name":"DP-1","x":0,"y":120,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":1},{"name":"eDP-1","x":1080,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0}]'
+previous='[{"name":"DP-1","x":1440,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0},{"name":"eDP-1","x":0,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0}]'
 workspaces='{"1":"DP-1","2":"DP-1","4":"eDP-1"}'
 
 run_layout() {
@@ -26,7 +26,7 @@ run_layout() {
 
 # Preview changes the live layout but does not persist it.
 run_layout preview keep-test "$proposed" "$previous" "$workspaces" settings
-grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "0x120", scale = 1 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "1920x0", scale = 2 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
 ! grep -F -- 'keyword monitor' "$test_root/hyprctl.log"
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
 test -f "$test_root/runtime/omarchy-monitor-studio/keep-test/proposed.json"
@@ -62,7 +62,7 @@ test ! -d "$test_root/runtime/omarchy-monitor-studio/keep-test"
 # Restore reapplies the saved state on a clean install with no monitors.lua loader.
 : >"$test_root/hyprctl.log"
 run_layout restore
-grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "0x120", scale = 1 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "1920x0", scale = 2 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
 grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = true }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = true }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = true })' "$test_root/hyprctl.log"
 
 # A failed Keep must not replace the last known-good persistent state.
@@ -78,7 +78,7 @@ run_layout revert failed-keep
 # Revert restores the previous live geometry without replacing persistence.
 run_layout preview revert-test "$proposed" "$previous" "$workspaces"
 run_layout revert revert-test
-grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "1440x0", scale = 1 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "0x0", scale = 2 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", mode = "1920x1080@59.95", position = "1440x0", scale = 1, transform = 0 }); hl.monitor({ output = "eDP-1", mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
 test ! -d "$test_root/runtime/omarchy-monitor-studio/revert-test"
 
 # The watchdog uses the same revert path when confirmation expires.
@@ -97,6 +97,20 @@ if run_layout preview invalid-test \
   echo "invalid monitor name was accepted" >&2
   exit 1
 fi
+
+if run_layout preview invalid-transform \
+  '[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":60,"scale":1,"transform":8}]' \
+  "$previous" '{}'; then
+  echo "invalid monitor transform was accepted" >&2
+  exit 1
+fi
+
+# Layouts saved before transform support remain valid and default to normal.
+: >"$test_root/hyprctl.log"
+legacy='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":60,"scale":1}]'
+run_layout preview legacy-transform "$legacy" "$legacy" '{}'
+grep -F -- 'transform = 0' "$test_root/hyprctl.log"
+run_layout revert legacy-transform
 
 
 if run_layout save-workspaces "$previous" '{"1":"bad\"monitor"}'; then

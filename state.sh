@@ -36,6 +36,7 @@ printf '%s\n' "$monitors_json" | jq -c --argjson preferred "$preferred_resolutio
     height,
     refreshRate,
     scale,
+    transform:(.transform // 0),
     x,
     y,
     description,

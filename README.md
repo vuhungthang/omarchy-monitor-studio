@@ -2,8 +2,8 @@
 
 Monitor Studio is an Omarchy Quattro bar plugin for arranging displays without
 editing monitor coordinates by hand. Select a display in the visual layout to
-change its resolution or scale, drag displays to match the physical desk, and
-assign numbered workspaces to a monitor.
+change its resolution, rotation, or scale, drag displays to match the physical
+desk, and assign numbered workspaces to a monitor.
 
 The plugin is derived from Omarchy's built-in `omarchy.monitor` panel and keeps
 its brightness, text-size, mirroring, and display-toggle controls.
@@ -13,7 +13,8 @@ its brightness, text-size, mirroring, and display-toggle controls.
 - Responsive drag-and-drop arrangement for one, two, three, or many displays
 - Full-screen arrangement editor for large and mixed-DPI layouts
 - Friendly display names from monitor make/model information
-- Per-display resolution and scale controls with EDID-based recommendations
+- Per-display resolution, rotation, and scale controls with EDID-based
+  recommendations
 - Workspace 1–10 assignment, with workspace 10 displayed as `0`
 - A 15-second Apply/Keep/Revert preview before display changes are saved
 - Automatic restoration of the last kept layout when the plugin starts
@@ -38,14 +39,14 @@ source and bar placement.
 
 1. Open the display icon in the Omarchy bar.
 2. Select a display in the arrangement diagram.
-3. Drag it, choose a resolution or scale, or assign workspaces.
+3. Drag it, choose a resolution, rotation, or scale, or assign workspaces.
 4. Select **Apply** to preview display changes.
 5. Select **Keep** within 15 seconds. Select **Revert**, close the panel, or
    wait for the timer to restore the previous live layout.
 
 Workspace-only changes are saved immediately when their section's Apply action
-is selected. Display arrangement, resolution, and scale changes always use the
-confirmation timer.
+is selected. Display arrangement, resolution, rotation, and scale changes
+always use the confirmation timer.
 
 ## Persistence and recovery
 

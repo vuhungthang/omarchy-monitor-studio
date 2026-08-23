@@ -10,6 +10,7 @@ function display(overrides) {
     height: 1080,
     refreshRate: 60,
     scale: 1,
+    transform: 0,
     x: 0,
     y: 0
   }, overrides || {})
@@ -108,8 +109,8 @@ function display(overrides) {
     refreshRate: 60,
     scale: 1
   }), [
-    { name: "DP-4", x: 0, y: 0, width: 1600, height: 900, refreshRate: 60, scale: 1 },
-    { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2 }
+    { name: "DP-4", x: 0, y: 0, width: 1600, height: 900, refreshRate: 60, scale: 1, transform: 0 },
+    { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
   ])
 }
 
@@ -128,12 +129,12 @@ function display(overrides) {
     changed: true,
     stagedSettings: { "DP-4": { width: 1600, height: 900 } },
     previous: [
-      { name: "DP-4", x: 0, y: 0, width: 1920, height: 1080, refreshRate: 60, scale: 1 },
-      { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2 }
+      { name: "DP-4", x: 0, y: 0, width: 1920, height: 1080, refreshRate: 60, scale: 1, transform: 0 },
+      { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
     ],
     proposed: [
-      { name: "DP-4", x: 0, y: 0, width: 1600, height: 900, refreshRate: 60, scale: 1 },
-      { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2 }
+      { name: "DP-4", x: 0, y: 0, width: 1600, height: 900, refreshRate: 60, scale: 1, transform: 0 },
+      { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
     ]
   })
 
@@ -203,8 +204,8 @@ function display(overrides) {
   assert.deepEqual(Model.buildDisplayLayoutPayload(displays, preview, {
     "DP-4": { width: 1600, height: 900, scale: 1.25 }
   }), [
-    { name: "DP-4", x: 0, y: 0, width: 1600, height: 900, refreshRate: 60, scale: 1.25 },
-    { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2 }
+    { name: "DP-4", x: 0, y: 0, width: 1600, height: 900, refreshRate: 60, scale: 1.25, transform: 0 },
+    { name: "eDP-1", x: 1920, y: 180, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
   ])
 }
 
@@ -408,9 +409,37 @@ function display(overrides) {
   ]
 
   assert.deepEqual(Model.buildDisplayLayoutPayload(displays, preview), [
-    { name: "DP-1", x: 0, y: 0, width: 1920, height: 1080, refreshRate: 59.95, scale: 1.25 },
-    { name: "eDP-1", x: 1920, y: 80, width: 2880, height: 1800, refreshRate: 60, scale: 2 }
+    { name: "DP-1", x: 0, y: 0, width: 1920, height: 1080, refreshRate: 59.95, scale: 1.25, transform: 0 },
+    { name: "eDP-1", x: 1920, y: 80, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
   ])
+}
+
+{
+  assert.equal(Model.cleanTransform(undefined), 0)
+  assert.equal(Model.cleanTransform(3), 3)
+  assert.equal(Model.cleanTransform(8), 0)
+
+  const displays = [
+    display({ name: "DP-1", transform: 0 }),
+    display({ name: "eDP-1", x: 1920 })
+  ]
+  const preview = Model.prepareDisplaySettingPreview(
+    displays, {}, "DP-1", { transform: 1 })
+
+  assert.equal(preview.changed, true)
+  assert.deepEqual(preview.stagedSettings, { "DP-1": { transform: 1 } })
+  assert.equal(preview.previous[0].transform, 0)
+  assert.equal(preview.proposed[0].transform, 1)
+}
+
+{
+  const fitted = Model.fitDisplayLayout([
+    display({ name: "DP-1", width: 1920, height: 1080, transform: 1 })
+  ], 320, 320, 10)
+
+  assert.equal(fitted.items[0].logicalWidth, 1080)
+  assert.equal(fitted.items[0].logicalHeight, 1920)
+  assert.ok(fitted.items[0].height > fitted.items[0].width)
 }
 
 {

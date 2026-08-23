@@ -7,6 +7,7 @@ All notable user-visible changes to Monitor Studio will be documented here.
 ### Added
 
 - Public release documentation, security boundary, and aggregate verification.
+- Per-display rotation controls for landscape, portrait, and inverted orientations.
 
 ### Fixed
 
