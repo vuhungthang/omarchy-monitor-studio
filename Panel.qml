@@ -616,6 +616,7 @@ Panel {
     root.layoutConfirmationSeconds = pending.remainingSeconds
     root.layoutConfirmationPending = true
     layoutConfirmationTimer.restart()
+    Qt.callLater(root.refitDisplayLayout)
   }
 
   function applyDisplayLayout() {

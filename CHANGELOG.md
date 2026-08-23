@@ -10,8 +10,8 @@ All notable user-visible changes to Monitor Studio will be documented here.
 
 ### Fixed
 
-- Keep the 15-second display confirmation visible when changing resolution
-  recreates the shell's per-screen monitor panel.
+- Keep the 15-second display confirmation and applied geometry visible when a
+  display change recreates the shell's per-screen monitor panel.
 
 ## [1.0.0] - Unreleased
 

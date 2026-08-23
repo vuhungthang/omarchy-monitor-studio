@@ -28,6 +28,11 @@ rg -qi 'unsandboxed' README.md
 rg -q '\.local/state/omarchy/monitor-studio/layout\.json' README.md
 rg -q 'Copyright \(c\) David Heinemeier Hansson' LICENSE
 
+# A screen mode change can recreate the per-screen panel. Recovering only the
+# countdown would leave its new layoutPreview empty, so recovery must also
+# rebuild the geometry from the applied Hyprland monitor state.
+rg -Uq 'layoutConfirmationTimer\.restart\(\)\n    Qt\.callLater\(root\.refitDisplayLayout\)\n  \}' Panel.qml
+
 if find . -type l -print -quit | grep -q .; then
   echo "release package must not contain symlinks" >&2
   exit 1
