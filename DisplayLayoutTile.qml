@@ -53,6 +53,7 @@ BorderSurface {
     Text {
       width: parent.width
       text: tile.display.label || tile.display.name
+      textFormat: Text.PlainText
       color: tile.foreground
       font.family: tile.fontFamily
       font.pixelSize: Style.font.bodySmall
@@ -65,6 +66,7 @@ BorderSurface {
       width: parent.width
       text: tile.display.name + " · "
         + Math.round(tile.display.logicalWidth) + " × " + Math.round(tile.display.logicalHeight)
+      textFormat: Text.PlainText
       color: Qt.darker(tile.foreground, 1.35)
       font.family: tile.fontFamily
       font.pixelSize: Style.font.caption

@@ -19,6 +19,7 @@ bash -n apply-layout.sh monitor-state-lib.sh state.sh \
 bash tests/apply-layout.test.sh
 bash tests/monitor-state.test.sh
 node tests/layout-model.test.js
+node tests/untrusted-display-text.test.js
 bash tests/release-package.test.sh
 
 omarchy plugin validate .

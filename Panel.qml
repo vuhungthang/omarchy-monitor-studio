@@ -443,16 +443,6 @@ Panel {
     return String(root.stagedWorkspaceAssignments[String(workspace)] || "")
   }
 
-  function workspaceOwnerLabel(workspace) {
-    var owner = root.workspaceOwner(workspace)
-    if (owner === "") return "Unassigned"
-    for (var i = 0; i < root.displays.length; i++) {
-      if (root.displays[i] && root.displays[i].name === owner)
-        return Model.displayLabel(root.displays[i])
-    }
-    return owner
-  }
-
   function toggleWorkspaceForSelected(workspace) {
     if (!root.selectedDisplay || root.layoutApplying || root.layoutConfirmationPending) return
     root.stagedWorkspaceAssignments = Model.toggleWorkspaceAssignment(
@@ -1476,8 +1466,9 @@ Panel {
 
                   width: workspaceGrid.cellWidth
                   text: modelData === 10 ? "0" : String(modelData)
-                  tooltipText: "Workspace " + (modelData === 10 ? "10 (0 key)" : modelData) + " — "
-                    + root.workspaceOwnerLabel(modelData)
+                  tooltipText: "Toggle workspace "
+                    + (modelData === 10 ? "10 (0 key)" : modelData)
+                    + " for the selected display"
                   selected: root.workspaceOwner(modelData) === root.selectedMonitorName
                   hasCursor: root.cursorActive && root.focusSection === "workspaces"
                     && root.selectedIndex === index
@@ -1699,6 +1690,7 @@ Panel {
       Text {
         text: Model.displayLabel(monitorRow.display) + " · " + monitorRow.display.name
           + (monitorRow.display.focused ? " · focused" : "")
+        textFormat: Text.PlainText
         color: root.bar.foreground
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.body

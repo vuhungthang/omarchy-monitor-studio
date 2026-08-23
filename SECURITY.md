@@ -10,6 +10,10 @@ The plugin does not require root privileges, install packages, download code,
 or access network services. Its intentional write surfaces are documented in
 `docs/security-and-operations.md`.
 
+Monitor identification fields reported by Hyprland can originate in external
+display EDID data and are treated as untrusted. Monitor Studio renders those
+values strictly as plain text rather than QML rich text.
+
 ## Reporting a vulnerability
 
 After the repository becomes public, report vulnerabilities through GitHub's

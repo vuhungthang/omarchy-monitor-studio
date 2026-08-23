@@ -154,6 +154,7 @@ PanelWindow {
             text: controller.selectedDisplay
               ? "Assign to " + controller.selectedDisplay.label
               : "Select a display"
+            textFormat: Text.PlainText
             color: Qt.darker(overlay.foreground, 1.35)
             font.family: overlay.fontFamily
             font.pixelSize: Style.font.caption
@@ -173,8 +174,9 @@ PanelWindow {
 
               width: Style.space(38)
               text: modelData === 10 ? "0" : String(modelData)
-              tooltipText: "Workspace " + (modelData === 10 ? "10 (0 key)" : modelData) + " — "
-                + controller.workspaceOwnerLabel(modelData)
+              tooltipText: "Toggle workspace "
+                + (modelData === 10 ? "10 (0 key)" : modelData)
+                + " for the selected display"
               selected: controller.workspaceOwner(modelData)
                 === controller.selectedMonitorName
               enabled: controller.selectedDisplay && !controller.layoutApplying

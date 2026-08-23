@@ -13,6 +13,11 @@ All notable user-visible changes to Monitor Studio will be documented here.
 - Keep the 15-second display confirmation and applied geometry visible when a
   display change recreates the shell's per-screen monitor panel.
 
+### Security
+
+- Render monitor-provided make, model, description, and connector labels as
+  plain text, and exclude them from tooltips that use automatic text parsing.
+
 ## [1.0.0] - Unreleased
 
 ### Added

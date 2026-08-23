@@ -49,6 +49,17 @@ configuration, or package-owned files.
 The script builds Lua only after validation and sends it as one argument to
 `hyprctl eval`; it does not evaluate payloads as shell source.
 
+## Display metadata rendering
+
+Monitor make, model, and description fields can originate in external display
+EDID data. They remain untrusted when transformed into friendly labels by the
+UI model. Every QML `Text` sink that receives monitor-derived strings declares
+`Text.PlainText`, preventing rich-text and resource markup interpretation.
+
+The shared Omarchy `Button` tooltip renders with automatic text detection and
+does not expose a format override. Monitor Studio therefore keeps EDID-derived
+labels out of those tooltips and uses trusted static workspace guidance there.
+
 ## Apply/Keep/Revert transaction
 
 1. **Apply** validates proposed and previous states, creates a private runtime
