@@ -49,3 +49,4 @@ printf '%s\n' "$monitors_json" | jq -c --argjson preferred "$preferred_resolutio
 
 hyprctl workspaces -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
 hyprctl workspacerules -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
+bash "$script_dir/apply-layout.sh" pending 2>/dev/null || printf '%s\n' '{}'

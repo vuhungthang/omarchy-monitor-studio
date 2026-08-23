@@ -420,6 +420,23 @@ function display(overrides) {
 }
 
 {
+  assert.deepEqual(Model.parsePendingDisplayTransaction(
+    '{"id":"display-123","scope":"settings","remainingSeconds":12}'
+  ), {
+    id: "display-123",
+    scope: "settings",
+    remainingSeconds: 12
+  })
+  assert.equal(Model.parsePendingDisplayTransaction('{}'), null)
+  assert.equal(Model.parsePendingDisplayTransaction(
+    '{"id":"bad/id","scope":"layout","remainingSeconds":12}'
+  ), null)
+  assert.equal(Model.parsePendingDisplayTransaction(
+    '{"id":"display-123","scope":"layout","remainingSeconds":0}'
+  ), null)
+}
+
+{
   assert.equal(Model.shouldAutoResetDisplayLayout({
     dirty: false,
     dragging: false,

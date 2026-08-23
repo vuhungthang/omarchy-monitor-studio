@@ -314,6 +314,8 @@ Panel {
       expandedSettingsSection: root.expandedSettingsSection,
       scale: root.monitorScale,
       expandedLayoutOpen: root.expandedLayoutOpen,
+      layoutConfirmationPending: root.layoutConfirmationPending,
+      layoutConfirmationSeconds: root.layoutConfirmationSeconds,
       displays: root.displays
     })
   }
@@ -601,8 +603,19 @@ Panel {
     layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
                                "preview", root.layoutTransactionId,
                                JSON.stringify(proposed), JSON.stringify(previous),
-                               JSON.stringify(root.workspacePayload())]
+                               JSON.stringify(root.workspacePayload()),
+                               root.layoutTransactionScope]
     layoutApplyProc.running = true
+  }
+
+  function recoverDisplayConfirmation(raw) {
+    var pending = Model.parsePendingDisplayTransaction(raw)
+    if (!pending) return
+    root.layoutTransactionId = pending.id
+    root.layoutTransactionScope = pending.scope
+    root.layoutConfirmationSeconds = pending.remainingSeconds
+    root.layoutConfirmationPending = true
+    layoutConfirmationTimer.restart()
   }
 
   function applyDisplayLayout() {
@@ -809,6 +822,7 @@ Panel {
         root.updateDisplays(String(lines[7] || "[]").trim())
         root.updateWorkspaceAssignments(String(lines[8] || "[]").trim(),
                                         String(lines[9] || "[]").trim())
+        root.recoverDisplayConfirmation(String(lines[10] || "{}").trim())
       }
     }
   }

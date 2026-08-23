@@ -494,6 +494,25 @@ function advanceDisplayConfirmation(seconds) {
   return { remaining: remaining, expired: remaining === 0 }
 }
 
+function parsePendingDisplayTransaction(raw) {
+  var value
+  try {
+    value = raw ? JSON.parse(String(raw)) : null
+  } catch (e) {
+    return null
+  }
+
+  if (!value || typeof value !== "object") return null
+  var id = String(value.id || "")
+  var scope = String(value.scope || "")
+  var remaining = Math.floor(Number(value.remainingSeconds))
+  if (!/^[A-Za-z0-9._-]+$/.test(id)
+      || (scope !== "layout" && scope !== "settings")
+      || !isFinite(remaining) || remaining < 1) return null
+
+  return { id: id, scope: scope, remainingSeconds: remaining }
+}
+
 function workspaceNumber(value, maximum) {
   var text = String(value === undefined || value === null ? "" : value).trim()
   if (!/^\d+$/.test(text)) return 0
@@ -620,6 +639,7 @@ if (typeof module !== "undefined") {
     buildMonitorSettingPayload: buildMonitorSettingPayload,
     prepareDisplaySettingPreview: prepareDisplaySettingPreview,
     advanceDisplayConfirmation: advanceDisplayConfirmation,
+    parsePendingDisplayTransaction: parsePendingDisplayTransaction,
     workspaceAssignments: workspaceAssignments,
     workspacesForMonitor: workspacesForMonitor,
     toggleWorkspaceAssignment: toggleWorkspaceAssignment,
