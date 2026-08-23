@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -euo pipefail
+
+plugin_dir=$(cd "$(dirname "$0")/.." && pwd)
+cd "$plugin_dir"
+
+for command in bash jq node qmllint hyprctl omarchy; do
+  command -v "$command" >/dev/null || {
+    echo "missing required verification command: $command" >&2
+    exit 1
+  }
+done
+
+bash -n apply-layout.sh monitor-state-lib.sh state.sh \
+  tests/apply-layout.test.sh tests/monitor-state.test.sh \
+  tests/release-package.test.sh
+
+bash tests/apply-layout.test.sh
+bash tests/monitor-state.test.sh
+node tests/layout-model.test.js
+bash tests/release-package.test.sh
+
+omarchy plugin validate .
+qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" \
+  DisplayLayoutTile.qml ExpandableSection.qml FullScreenArrangement.qml Panel.qml
+
+if rg -n '(curl|wget)[[:space:]].*\|[[:space:]]*(ba)?sh|(^|[^[:alnum:]_])(sudo|pkexec)([^[:alnum:]_]|$)' \
+  --glob '*.sh' --glob '*.qml' .; then
+  echo "high-risk command pattern found" >&2
+  exit 1
+fi
+
+echo "release verification passed"

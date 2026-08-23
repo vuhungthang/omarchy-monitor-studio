@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.vuhungthang.monitor-studio",
+  "name": "Monitor Studio",
+  "version": "1.0.0",
+  "author": "vuhungthang",
+  "description": "Per-display resolution, scaling, workspace assignment, and drag-and-drop arrangement",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Monitor Studio",
+    "description": "Per-display resolution, scaling, workspace assignment, and drag-and-drop arrangement",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.monitor"
+  }
+}
