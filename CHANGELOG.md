@@ -8,6 +8,11 @@ All notable user-visible changes to Monitor Studio will be documented here.
 
 - Public release documentation, security boundary, and aggregate verification.
 
+### Fixed
+
+- Keep the 15-second display confirmation visible when changing resolution
+  recreates the shell's per-screen monitor panel.
+
 ## [1.0.0] - Unreleased
 
 ### Added
