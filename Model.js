@@ -139,6 +139,12 @@ function matchingResolutionValue(options, width, height) {
   return ""
 }
 
+function cleanTransform(transform) {
+  var value = Number(transform)
+  if (!isFinite(value) || Math.floor(value) !== value || value < 0 || value > 7) return 0
+  return value
+}
+
 function stageDisplaySettings(displays, stagedSettings, targetName, overrides) {
   var next = {}
   var source = stagedSettings || {}
@@ -157,13 +163,17 @@ function stageDisplaySettings(displays, stagedSettings, targetName, overrides) {
 
   var merged = Object.assign({}, next[targetName] || {}, overrides || {})
   var staged = {}
-  var fields = ["width", "height", "refreshRate", "scale"]
+  var fields = ["width", "height", "refreshRate", "scale", "transform"]
   for (var j = 0; j < fields.length; j++) {
     var field = fields[j]
     if (merged[field] === undefined) continue
     var value = Number(merged[field])
-    var actual = Number(target[field])
-    if (!isFinite(value) || value <= 0) continue
+    var actual = field === "transform"
+      ? cleanTransform(target[field]) : Number(target[field])
+    if (!isFinite(value)) continue
+    if (field === "transform") {
+      if (Math.floor(value) !== value || value < 0 || value > 7) continue
+    } else if (value <= 0) continue
     if (field === "width" || field === "height") value = Math.round(value)
     var tolerance = field === "refreshRate" ? 0.01 : 0.0001
     if (!isFinite(actual) || Math.abs(value - actual) > tolerance) staged[field] = value
@@ -263,6 +273,8 @@ function fitDisplayLayout(displays, canvasWidth, canvasHeight, padding, utilizat
     var pixelWidth = finiteNumber(display && display.width, 0)
     var pixelHeight = finiteNumber(display && display.height, 0)
     if (!display || display.enabled === false || pixelWidth <= 0 || pixelHeight <= 0) continue
+    var transform = cleanTransform(display.transform)
+    var rotated = transform % 2 === 1
 
     usable.push({
       name: String(display.name || ""),
@@ -270,8 +282,8 @@ function fitDisplayLayout(displays, canvasWidth, canvasHeight, padding, utilizat
       focused: display.focused === true,
       logicalX: finiteNumber(display.x, 0),
       logicalY: finiteNumber(display.y, 0),
-      logicalWidth: pixelWidth / scale,
-      logicalHeight: pixelHeight / scale
+      logicalWidth: (rotated ? pixelHeight : pixelWidth) / scale,
+      logicalHeight: (rotated ? pixelWidth : pixelHeight) / scale
     })
   }
 
@@ -428,7 +440,9 @@ function buildDisplayLayoutPayload(displays, previewItems, stagedSettings) {
       width: Math.round(finiteNumber(staged.width, finiteNumber(display.width, 0))),
       height: Math.round(finiteNumber(staged.height, finiteNumber(display.height, 0))),
       refreshRate: finiteNumber(staged.refreshRate, finiteNumber(display.refreshRate, 60)),
-      scale: finiteNumber(staged.scale, finiteNumber(display.scale, 1))
+      scale: finiteNumber(staged.scale, finiteNumber(display.scale, 1)),
+      transform: cleanTransform(staged.transform !== undefined
+                                ? staged.transform : display.transform)
     }
   }).filter(function(display) {
     return display.name !== "" && display.width > 0 && display.height > 0 && display.scale > 0
@@ -462,7 +476,9 @@ function buildMonitorSettingPayload(displays, targetName, overrides) {
       refreshRate: finiteNumber(targeted ? changes.refreshRate : undefined,
                                 finiteNumber(display.refreshRate, 60)),
       scale: finiteNumber(targeted ? changes.scale : undefined,
-                          finiteNumber(display.scale, 1))
+                          finiteNumber(display.scale, 1)),
+      transform: cleanTransform(targeted && changes.transform !== undefined
+                                ? changes.transform : display.transform)
     }
   }).filter(function(display) {
     return display.name !== "" && display.width > 0 && display.height > 0 && display.scale > 0
@@ -623,6 +639,7 @@ if (typeof module !== "undefined") {
     parseDisplayMode: parseDisplayMode,
     availableResolutions: availableResolutions,
     matchingResolutionValue: matchingResolutionValue,
+    cleanTransform: cleanTransform,
     stageDisplaySettings: stageDisplaySettings,
     displaysWithSettings: displaysWithSettings,
     retainDisplaySettings: retainDisplaySettings,

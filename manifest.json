@@ -4,7 +4,7 @@
   "name": "Monitor Studio",
   "version": "1.0.0",
   "author": "vuhungthang",
-  "description": "Per-display resolution, scaling, workspace assignment, and drag-and-drop arrangement",
+  "description": "Per-display resolution, rotation, scaling, workspace assignment, and drag-and-drop arrangement",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "Monitor Studio",
-    "description": "Per-display resolution, scaling, workspace assignment, and drag-and-drop arrangement",
+    "description": "Per-display resolution, rotation, scaling, workspace assignment, and drag-and-drop arrangement",
     "category": "System",
     "allowMultiple": false
   },

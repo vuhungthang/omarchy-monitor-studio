@@ -88,6 +88,14 @@ Panel {
     ? Model.matchingResolutionValue(resolutionOptions, selectedDisplayPreview.width,
                                     selectedDisplayPreview.height)
     : ""
+  readonly property var rotationOptions: [
+    { value: "0", label: "Landscape" },
+    { value: "1", label: "Portrait (90°)" },
+    { value: "2", label: "Landscape (180°)" },
+    { value: "3", label: "Portrait (270°)" }
+  ]
+  readonly property string rotationValue: selectedDisplayPreview
+    ? String(Model.cleanTransform(selectedDisplayPreview.transform)) : "0"
 
   // Carry sub-notch touchpad deltas between wheel events.
   property real wheelAccumulator: 0
@@ -141,6 +149,7 @@ Panel {
       list.push("workspaces")
     if (expandedSettingsSection === "display") {
       if (selectedDisplay && resolutionOptions.length > 0) list.push("resolution")
+      list.push("rotation")
       list.push("scale")
     }
     if (expandedSettingsSection === "monitors" && displays.length > 1)
@@ -154,6 +163,7 @@ Panel {
     if (section === "arrangement") return layoutPreview.length + 2
     if (section === "workspaces") return workspaceNumbers.length
     if (section === "resolution") return 0
+    if (section === "rotation") return 0
     if (section === "scale") return scaleValues.length
     if (section === "monitors") return displays.length
     return 0
@@ -163,10 +173,12 @@ Panel {
     // brightness and text size are lone sliders; scale presets sit horizontally.
     return section === "brightness" || section === "textsize"
       || section === "workspaces" || section === "resolution" || section === "scale"
+      || section === "rotation"
   }
 
   function sectionFirstIndex(section) {
-    if (section === "brightness" || section === "textsize" || section === "resolution") return -1
+    if (section === "brightness" || section === "textsize"
+        || section === "resolution" || section === "rotation") return -1
     return 0
   }
 
@@ -235,6 +247,10 @@ Panel {
       resolutionDropdown.toggle()
       return
     }
+    if (focusSection === "rotation") {
+      rotationDropdown.toggle()
+      return
+    }
     if (focusSection === "workspaces" && selectedIndex >= 0
         && selectedIndex < workspaceNumbers.length) {
       toggleWorkspaceForSelected(workspaceNumbers[selectedIndex])
@@ -263,7 +279,7 @@ Panel {
     if (sectionIsSingleRow(focusSection)) {
       // brightness/text size use the -1 sentinel; scale clamps into the presets.
       if (focusSection === "brightness" || focusSection === "textsize"
-          || focusSection === "resolution") selectedIndex = -1
+          || focusSection === "resolution" || focusSection === "rotation") selectedIndex = -1
       else if (selectedIndex < 0 || selectedIndex >= count) selectedIndex = 0
       return
     }
@@ -684,6 +700,13 @@ Panel {
                                           root.selectedDisplayPreview.height))
     if (!isFinite(cleaned) || cleaned <= 0) return
     root.stageMonitorSetting({ scale: cleaned })
+  }
+
+  function setRotation(value) {
+    var transform = Number(value)
+    if (!isFinite(transform) || Math.floor(transform) !== transform
+        || transform < 0 || transform > 3) return
+    root.stageMonitorSetting({ transform: transform })
   }
 
   function setResolution(value) {
@@ -1539,6 +1562,38 @@ Panel {
             PanelSeparator {
               width: parent.width
               visible: root.resolutionOptions.length > 0
+              foreground: root.bar.foreground
+            }
+
+            PanelSectionHeader {
+              width: parent.width
+              text: "ROTATION"
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+            }
+
+            Dropdown {
+              id: rotationDropdown
+              width: parent.width
+              showLabel: false
+              options: root.rotationOptions
+              value: root.rotationValue
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              hasCursor: root.cursorActive && root.focusSection === "rotation"
+              enabled: !root.layoutApplying && !root.layoutConfirmationPending
+              onChanged: function(value) { root.setRotation(value) }
+              onHovered: function(isHovered) {
+                if (!isHovered || root.reflowingText) return
+                root.cursorActive = true
+                root.focusSection = "rotation"
+                root.selectedIndex = -1
+              }
+              onHasCursorChanged: if (hasCursor) root.ensureCursorVisible(this)
+            }
+
+            PanelSeparator {
+              width: parent.width
               foreground: root.bar.foreground
             }
 

@@ -21,7 +21,8 @@ validate_payload() {
       (.width | type == "number" and floor == . and . > 0 and . <= 32768) and
       (.height | type == "number" and floor == . and . > 0 and . <= 32768) and
       (.refreshRate | type == "number" and . > 0 and . <= 1000) and
-      (.scale | type == "number" and . >= 0.5 and . <= 4)
+      (.scale | type == "number" and . >= 0.5 and . <= 4) and
+      ((.transform // 0) | type == "number" and floor == . and . >= 0 and . <= 7)
     )
   ' >/dev/null <<<"$1"
 }
@@ -39,13 +40,13 @@ validate_workspace_payload() {
 apply_payload() {
   local payload="$1"
   local lua_code=""
-  local statement name x y width height refresh scale
+  local statement name x y width height refresh scale transform
 
-  while IFS=$'\t' read -r name x y width height refresh scale; do
-    statement="hl.monitor({ output = \"$name\", mode = \"${width}x${height}@${refresh}\", position = \"${x}x${y}\", scale = ${scale} })"
+  while IFS=$'\t' read -r name x y width height refresh scale transform; do
+    statement="hl.monitor({ output = \"$name\", mode = \"${width}x${height}@${refresh}\", position = \"${x}x${y}\", scale = ${scale}, transform = ${transform} })"
     [[ -z $lua_code ]] || lua_code+="; "
     lua_code+="$statement"
-  done < <(jq -r '.[] | [.name, .x, .y, .width, .height, .refreshRate, .scale] | @tsv' <<<"$payload")
+  done < <(jq -r '.[] | [.name, .x, .y, .width, .height, .refreshRate, .scale, (.transform // 0)] | @tsv' <<<"$payload")
 
   hyprctl eval "$lua_code" >/dev/null
 }
