@@ -96,6 +96,13 @@ Panel {
   ]
   readonly property string rotationValue: selectedDisplayPreview
     ? String(Model.cleanTransform(selectedDisplayPreview.transform)) : "0"
+  readonly property var refreshRateOptions: selectedDisplayPreview
+    ? Model.availableRefreshRates(selectedDisplay ? selectedDisplay.availableModes : [],
+                                  selectedDisplayPreview.width, selectedDisplayPreview.height)
+    : []
+  readonly property string refreshRateValue: selectedDisplayPreview
+    ? Model.matchingRefreshRateValue(refreshRateOptions, selectedDisplayPreview.refreshRate)
+    : ""
 
   // Carry sub-notch touchpad deltas between wheel events.
   property real wheelAccumulator: 0
@@ -150,6 +157,7 @@ Panel {
     if (expandedSettingsSection === "display") {
       if (selectedDisplay && resolutionOptions.length > 0) list.push("resolution")
       list.push("rotation")
+      if (refreshRateOptions.length > 0) list.push("refreshRate")
       list.push("scale")
     }
     if (expandedSettingsSection === "monitors" && displays.length > 1)
@@ -164,6 +172,7 @@ Panel {
     if (section === "workspaces") return workspaceNumbers.length
     if (section === "resolution") return 0
     if (section === "rotation") return 0
+    if (section === "refreshRate") return 0
     if (section === "scale") return scaleValues.length
     if (section === "monitors") return displays.length
     return 0
@@ -173,12 +182,12 @@ Panel {
     // brightness and text size are lone sliders; scale presets sit horizontally.
     return section === "brightness" || section === "textsize"
       || section === "workspaces" || section === "resolution" || section === "scale"
-      || section === "rotation"
+      || section === "rotation" || section === "refreshRate"
   }
 
   function sectionFirstIndex(section) {
     if (section === "brightness" || section === "textsize"
-        || section === "resolution" || section === "rotation") return -1
+        || section === "resolution" || section === "rotation" || section === "refreshRate") return -1
     return 0
   }
 
@@ -251,6 +260,10 @@ Panel {
       rotationDropdown.toggle()
       return
     }
+    if (focusSection === "refreshRate") {
+      refreshRateDropdown.toggle()
+      return
+    }
     if (focusSection === "workspaces" && selectedIndex >= 0
         && selectedIndex < workspaceNumbers.length) {
       toggleWorkspaceForSelected(workspaceNumbers[selectedIndex])
@@ -279,7 +292,8 @@ Panel {
     if (sectionIsSingleRow(focusSection)) {
       // brightness/text size use the -1 sentinel; scale clamps into the presets.
       if (focusSection === "brightness" || focusSection === "textsize"
-          || focusSection === "resolution" || focusSection === "rotation") selectedIndex = -1
+          || focusSection === "resolution" || focusSection === "rotation"
+          || focusSection === "refreshRate") selectedIndex = -1
       else if (selectedIndex < 0 || selectedIndex >= count) selectedIndex = 0
       return
     }
@@ -713,14 +727,25 @@ Panel {
     if (!root.selectedDisplay) return
     var mode = Model.parseDisplayMode(value)
     if (!mode) return
+    var refreshOptions = Model.availableRefreshRates(root.selectedDisplay.availableModes,
+                                                      mode.width, mode.height)
+    var refreshRate = Number(Model.preferredRefreshRate(
+      refreshOptions, root.selectedDisplayPreview.refreshRate))
+    if (!isFinite(refreshRate) || refreshRate <= 0) return
     var cleanedScale = Number(Model.cleanScale(root.selectedDisplayPreview.scale,
                                                 mode.width, mode.height))
     root.stageMonitorSetting({
       width: mode.width,
       height: mode.height,
-      refreshRate: mode.refreshRate,
+      refreshRate: refreshRate,
       scale: cleanedScale > 0 ? cleanedScale : 1
     })
+  }
+
+  function setRefreshRate(value) {
+    var refreshRate = Number(value)
+    if (!isFinite(refreshRate) || refreshRate <= 0) return
+    root.stageMonitorSetting({ refreshRate: refreshRate })
   }
 
   function stageMonitorSetting(overrides) {
@@ -1594,6 +1619,41 @@ Panel {
 
             PanelSeparator {
               width: parent.width
+              foreground: root.bar.foreground
+            }
+
+            PanelSectionHeader {
+              width: parent.width
+              text: "REFRESH RATE"
+              visible: root.refreshRateOptions.length > 0
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+            }
+
+            Dropdown {
+              id: refreshRateDropdown
+              width: parent.width
+              visible: root.refreshRateOptions.length > 0
+              showLabel: false
+              options: root.refreshRateOptions
+              value: root.refreshRateValue
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              hasCursor: root.cursorActive && root.focusSection === "refreshRate"
+              enabled: !root.layoutApplying && !root.layoutConfirmationPending
+              onChanged: function(value) { root.setRefreshRate(value) }
+              onHovered: function(isHovered) {
+                if (!isHovered || root.reflowingText) return
+                root.cursorActive = true
+                root.focusSection = "refreshRate"
+                root.selectedIndex = -1
+              }
+              onHasCursorChanged: if (hasCursor) root.ensureCursorVisible(this)
+            }
+
+            PanelSeparator {
+              width: parent.width
+              visible: root.refreshRateOptions.length > 0
               foreground: root.bar.foreground
             }
 

@@ -139,6 +139,39 @@ function matchingResolutionValue(options, width, height) {
   return ""
 }
 
+function availableRefreshRates(modes, width, height) {
+  var targetWidth = Math.round(finiteNumber(width, 0))
+  var targetHeight = Math.round(finiteNumber(height, 0))
+  var seen = {}
+  var rates = []
+  for (var i = 0; Array.isArray(modes) && i < modes.length; i++) {
+    var parsed = parseDisplayMode(modes[i])
+    if (!parsed || parsed.width !== targetWidth || parsed.height !== targetHeight) continue
+    var key = String(parsed.refreshRate)
+    if (seen[key]) continue
+    seen[key] = true
+    rates.push({ value: key, refreshRate: parsed.refreshRate, label: key + " Hz" })
+  }
+  rates.sort(function(a, b) { return b.refreshRate - a.refreshRate })
+  return rates
+}
+
+function matchingRefreshRateValue(options, refreshRate) {
+  var target = Number(refreshRate)
+  if (!isFinite(target)) return ""
+  for (var i = 0; Array.isArray(options) && i < options.length; i++) {
+    if (Math.abs(Number(options[i].refreshRate) - target) <= 0.01)
+      return String(options[i].value || "")
+  }
+  return ""
+}
+
+function preferredRefreshRate(options, currentRefreshRate) {
+  var current = matchingRefreshRateValue(options, currentRefreshRate)
+  return current || (Array.isArray(options) && options.length > 0
+    ? String(options[0].value || "") : "")
+}
+
 function cleanTransform(transform) {
   var value = Number(transform)
   if (!isFinite(value) || Math.floor(value) !== value || value < 0 || value > 7) return 0
@@ -639,6 +672,9 @@ if (typeof module !== "undefined") {
     parseDisplayMode: parseDisplayMode,
     availableResolutions: availableResolutions,
     matchingResolutionValue: matchingResolutionValue,
+    availableRefreshRates: availableRefreshRates,
+    matchingRefreshRateValue: matchingRefreshRateValue,
+    preferredRefreshRate: preferredRefreshRate,
     cleanTransform: cleanTransform,
     stageDisplaySettings: stageDisplaySettings,
     displaysWithSettings: displaysWithSettings,
