@@ -12,19 +12,28 @@ for command in bash jq node qmllint hyprctl omarchy; do
   }
 done
 
-bash -n apply-layout.sh monitor-state-lib.sh state.sh \
-  tests/apply-layout.test.sh tests/monitor-state.test.sh \
-  tests/release-package.test.sh
+bash -n apply-layout.sh monitor-state-lib.sh monitor-snapshot-lib.sh profile-store-lib.sh \
+  state.sh \
+  tests/apply-layout.test.sh tests/monitor-state.test.sh tests/monitor-snapshot.test.sh \
+  tests/profile-store.test.sh tests/profile-management.test.sh tests/release-package.test.sh
 
 bash tests/apply-layout.test.sh
 bash tests/monitor-state.test.sh
+bash tests/monitor-snapshot.test.sh
+bash tests/profile-store.test.sh
+bash tests/profile-management.test.sh
 node tests/layout-model.test.js
+node tests/topology-model.test.js
+node tests/display-events.test.js
+node tests/profile-matching.test.js
 node tests/untrusted-display-text.test.js
 bash tests/release-package.test.sh
 
 omarchy plugin validate .
 qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" \
-  DisplayLayoutTile.qml ExpandableSection.qml FullScreenArrangement.qml Panel.qml
+  ConnectedDisplaysSection.qml DisplayLayoutTile.qml ExpandableSection.qml \
+  FullScreenArrangement.qml IdentifyOverlay.qml ProfileSection.qml \
+  TopologyPresets.qml Panel.qml
 
 if rg -n '(curl|wget)[[:space:]].*\|[[:space:]]*(ba)?sh|(^|[^[:alnum:]_])(sudo|pkexec)([^[:alnum:]_]|$)' \
   --glob '*.sh' --glob '*.qml' .; then

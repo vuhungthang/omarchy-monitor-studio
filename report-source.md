@@ -18,7 +18,7 @@ The profile and recovery foundation is the differentiator. A basic monitor edito
 
 ## What the project already does
 
-The current project already supports drag-and-drop arrangement, resolution, refresh-rate, rotation, and scale selection, workspace 1–10 assignment, display toggling/mirroring inherited from Omarchy, EDID-based preferred-resolution recommendations, persisted state, and a 15-second Apply/Keep/Revert transaction. Refresh rates are filtered to modes supported at the selected resolution, and rotation covers landscape, portrait, and inverted orientations. That means the next features should avoid merely adding more raw fields to the existing panel.
+The current project supports drag-and-drop arrangement, resolution, refresh-rate, rotation, and scale selection, workspace 1–10 assignment, display toggling, compatibility-checked mirroring, EDID-based preferred-resolution recommendations, connected-set profiles, and a 15-second Apply/Keep/Revert transaction. Refresh rates are filtered to modes supported at the selected resolution, mirroring intersects advertised modes before preview, and rotation covers landscape, portrait, and inverted orientations. That means the next features should avoid merely adding more raw fields to the existing panel.
 
 The current implementation also writes runtime state rather than editing `monitors.lua`, validates monitor payloads, and uses a private transaction directory. Those are strong foundations for profiles and recovery.
 

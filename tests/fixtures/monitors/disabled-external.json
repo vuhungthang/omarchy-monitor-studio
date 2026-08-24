@@ -1,0 +1,56 @@
+[
+  {
+    "id": 0,
+    "name": "eDP-1",
+    "description": "Test Laptop Internal Panel",
+    "make": "Test Laptop",
+    "model": "Internal Panel",
+    "serial": "",
+    "width": 2880,
+    "height": 1800,
+    "physicalWidth": 309,
+    "physicalHeight": 193,
+    "refreshRate": 60.001,
+    "x": 0,
+    "y": 0,
+    "scale": 2,
+    "transform": 0,
+    "focused": true,
+    "disabled": false,
+    "mirrorOf": "none",
+    "availableModes": [
+      "2880x1800@60.00Hz",
+      "1920x1200@60.00Hz",
+      "1920x1080@60.00Hz",
+      "1440x900@60.00Hz",
+      "1280x800@60.00Hz",
+      "1280x720@60.00Hz"
+    ]
+  },
+  {
+    "id": 1,
+    "name": "HDMI-A-1",
+    "description": "Test Display Co. VA1655 TST0000003",
+    "make": "Test Display Co.",
+    "model": "VA1655",
+    "serial": "TST0000003",
+    "width": 1920,
+    "height": 1080,
+    "physicalWidth": 344,
+    "physicalHeight": 194,
+    "refreshRate": 60,
+    "x": 1440,
+    "y": 0,
+    "scale": 1,
+    "transform": 0,
+    "focused": false,
+    "disabled": true,
+    "mirrorOf": "none",
+    "availableModes": [
+      "1920x1080@60.00Hz",
+      "1920x1080@59.94Hz",
+      "1280x720@60.00Hz",
+      "1024x768@60.00Hz"
+    ]
+  }
+]

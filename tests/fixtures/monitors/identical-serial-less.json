@@ -1,0 +1,83 @@
+[
+  {
+    "id": 0,
+    "name": "eDP-1",
+    "description": "Test Laptop Internal Panel",
+    "make": "Test Laptop",
+    "model": "Internal Panel",
+    "serial": "",
+    "width": 2880,
+    "height": 1800,
+    "physicalWidth": 309,
+    "physicalHeight": 193,
+    "refreshRate": 60.001,
+    "x": 1080,
+    "y": 0,
+    "scale": 2,
+    "transform": 0,
+    "focused": false,
+    "disabled": false,
+    "mirrorOf": "none",
+    "availableModes": [
+      "2880x1800@60.00Hz",
+      "1920x1200@60.00Hz",
+      "1920x1080@60.00Hz",
+      "1440x900@60.00Hz",
+      "1280x720@60.00Hz"
+    ]
+  },
+  {
+    "id": 1,
+    "name": "DP-1",
+    "description": "Test Display Co. VS228",
+    "make": "Test Display Co.",
+    "model": "VS228",
+    "serial": "",
+    "width": 1920,
+    "height": 1080,
+    "physicalWidth": 476,
+    "physicalHeight": 268,
+    "refreshRate": 60,
+    "x": 0,
+    "y": 0,
+    "scale": 1,
+    "transform": 0,
+    "focused": false,
+    "disabled": false,
+    "mirrorOf": "none",
+    "availableModes": [
+      "1920x1080@60.00Hz",
+      "1920x1080@59.94Hz",
+      "1680x1050@59.95Hz",
+      "1440x900@59.89Hz",
+      "1280x720@60.00Hz"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "DP-2",
+    "description": "Test Display Co. VS228",
+    "make": "Test Display Co.",
+    "model": "VS228",
+    "serial": "",
+    "width": 1920,
+    "height": 1080,
+    "physicalWidth": 476,
+    "physicalHeight": 268,
+    "refreshRate": 60,
+    "x": 1920,
+    "y": 0,
+    "scale": 1,
+    "transform": 0,
+    "focused": true,
+    "disabled": false,
+    "mirrorOf": "none",
+    "availableModes": [
+      "1920x1080@60.00Hz",
+      "1920x1080@59.94Hz",
+      "1680x1050@59.95Hz",
+      "1440x900@59.89Hz",
+      "1280x720@60.00Hz"
+    ]
+  }
+]

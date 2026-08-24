@@ -484,11 +484,13 @@ function display(overrides) {
 
 {
   assert.deepEqual(Model.parsePendingDisplayTransaction(
-    '{"id":"display-123","scope":"settings","remainingSeconds":12}'
+    '{"id":"display-123","scope":"settings","remainingSeconds":12,"originScreen":"DP-1","originWorkspace":5}'
   ), {
     id: "display-123",
     scope: "settings",
-    remainingSeconds: 12
+    remainingSeconds: 12,
+    originScreen: "DP-1",
+    originWorkspace: 5
   })
   assert.equal(Model.parsePendingDisplayTransaction('{}'), null)
   assert.equal(Model.parsePendingDisplayTransaction(
@@ -497,6 +499,18 @@ function display(overrides) {
   assert.equal(Model.parsePendingDisplayTransaction(
     '{"id":"display-123","scope":"layout","remainingSeconds":0}'
   ), null)
+}
+
+{
+  const screens = ["eDP-1", "DP-5", "DP-4"]
+  assert.equal(Model.confirmationTargetScreen("DP-5", "eDP-1", "DP-4", screens), "DP-5")
+  assert.equal(Model.confirmationTargetScreen("DP-9", "eDP-1", "DP-5", screens), "eDP-1")
+  assert.equal(Model.confirmationTargetScreen("DP-9", "DP-9", "DP-5", screens), "DP-5")
+  assert.equal(Model.confirmationTargetScreen("DP-9", "DP-9", "DP-9", screens), "DP-4")
+  assert.equal(Model.confirmationTargetScreen("DP-5", "", "", []), "")
+
+  assert.equal(Model.ownsDisplayConfirmation("eDP-1", "DP-9", "eDP-1", "DP-5", screens), true)
+  assert.equal(Model.ownsDisplayConfirmation("DP-4", "DP-9", "eDP-1", "DP-5", screens), false)
 }
 
 {

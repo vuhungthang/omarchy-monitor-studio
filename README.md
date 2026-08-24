@@ -18,7 +18,12 @@ its brightness, text-size, mirroring, and display-toggle controls.
   resolution
 - Workspace 1–10 assignment, with workspace 10 displayed as `0`
 - A 15-second Apply/Keep/Revert preview before display changes are saved
-- Automatic restoration of the last kept layout when the plugin starts
+- Identity-aware connected-set profiles with explicit match confidence
+- Persistent anchor displays and signed coordinates
+- Identify overlays, read-only Refresh, and transitional/disabled status
+- Internal only, External only, Extend, and compatibility-checked Duplicate
+  presets with remembered variants
+- Automatic restoration only for an exact safe connected-set match
 
 ## Install
 
@@ -39,30 +44,64 @@ source and bar placement.
 ## Use
 
 1. Open the display icon in the Omarchy bar.
-2. Select a display in the arrangement diagram.
-3. Drag it, choose a resolution, refresh rate, rotation, or scale, or assign
-   workspaces.
-4. Select **Apply** to preview display changes.
-5. Select **Keep** within 15 seconds. Select **Revert**, close the panel, or
+2. Use **Identify** when connector labels are unclear, and **Refresh** after a
+   dock, KVM, wireless, or virtual display changes.
+3. Select a display, then arrange it, configure its mode, or assign workspaces;
+   alternatively choose a topology preset.
+4. Review the compatibility summary before duplicating unlike panels.
+5. Select **Apply** to preview staged changes. Presets preview immediately.
+6. Select **Keep** within 15 seconds. Select **Revert**, close the panel, or
    wait for the timer to restore the previous live layout.
 
+If a preview makes the panel unreachable, invoke the independent shell IPC
+from a terminal or launcher:
+
+```bash
+omarchy shell omarchy.monitor revert
+```
+
+For a keyboard escape hatch, add this binding yourself to your Hyprland user
+configuration (Monitor Studio does not install or edit key bindings):
+
+```text
+bindd = SUPER SHIFT, BackSpace, Emergency display revert, exec, omarchy shell omarchy.monitor revert
+```
+
 Workspace-only changes are saved immediately when their section's Apply action
-is selected. Display arrangement, resolution, refresh-rate, rotation, and scale
-changes always use the confirmation timer.
+is selected. Arrangement, mode, rotation, scale, anchor, enable/disable, and
+topology-preset changes use the confirmation timer.
+
+## Profiles and matching
+
+The schema-v2 store keeps a separate topology for each connected display set,
+including identity evidence, modes, arrangement, workspaces, anchor, and
+confirmed preset variants. Exact matches may restore automatically. A known
+monitor that moved connectors must be explicitly updated or saved as a new
+profile. Weak or ambiguous matches never overwrite a profile; use **Identify**
+and verify connector assignments first.
+
+Naming, selecting, and duplicating profiles do not apply a topology. Deleting
+a profile requires confirmation and does not alter the live desktop.
 
 ## Persistence and recovery
 
 Kept monitor and workspace settings are stored as validated JSON at:
 
 ```text
-~/.local/state/omarchy/monitor-studio/layout.json
+~/.local/state/omarchy/monitor-studio/profiles.json
 ```
 
-The plugin reapplies this file when its widget loads. It does not edit
-`~/.config/hypr/monitors.lua` or replace unrelated monitor rules. During Keep,
-Hyprland is reloaded and the saved state is reapplied, which clears superseded
-runtime workspace rules without requiring a permanent loader in Hyprland
-configuration.
+The plugin reapplies the active profile when its widget loads only after an
+exact connected-set match. It does not edit `~/.config/hypr/monitors.lua` or
+replace unrelated monitor rules. During Keep, Hyprland is reloaded and the
+confirmed state is reapplied, clearing superseded runtime workspace rules
+without a permanent loader in Hyprland configuration.
+
+Older schema-v1 state at
+`~/.local/state/omarchy/monitor-studio/layout.json` is retained as a backup and
+imported only when its connector set exactly matches. Migration is atomic and
+idempotent; the legacy backup is removed only after the first successful
+schema-v2 Keep.
 
 If a saved layout causes trouble, reload Hyprland before reopening the plugin:
 
@@ -70,8 +109,22 @@ If a saved layout causes trouble, reload Hyprland before reopening the plugin:
 hyprctl reload
 ```
 
-To discard only Monitor Studio's saved state, remove the state file above,
-then run `hyprctl reload`. Your own `monitors.lua` remains the fallback.
+To discard only Monitor Studio's saved profiles, remove `profiles.json`, then
+run `hyprctl reload`. Your own `monitors.lua` remains the fallback. Before the
+first confirmed migration, preserve `layout.json` as the recovery copy.
+
+## Troubleshooting
+
+- **A display is missing:** select **Refresh** after the connection settles.
+  Check the cable, dock/KVM, and `hyprctl monitors all -j` if it remains absent.
+- **A profile is moved, weak, or ambiguous:** use **Identify**. Update or fork a
+  moved profile deliberately; uncertain profiles cannot be kept automatically.
+- **A mode or Duplicate is unavailable:** choose a mode advertised by every
+  affected display. Lower resolution or refresh rate may avoid link/GPU limits.
+- **The compositor adjusted a result:** Monitor Studio saves the re-enumerated
+  result and explains which mode, position, scale, or mirror grouping changed.
+- **The panel became unreachable:** use emergency IPC or wait for the detached
+  watchdog. `hyprctl reload` remains the final fallback.
 
 ## Remove
 
@@ -80,9 +133,10 @@ omarchy plugin remove io.github.vuhungthang.monitor-studio
 hyprctl reload
 ```
 
-Removal does not delete the optional state file. Delete
-`~/.local/state/omarchy/monitor-studio/layout.json` if you do not want to keep
-it for a future installation.
+Removal does not delete saved profiles. Delete
+`~/.local/state/omarchy/monitor-studio/profiles.json` if you do not want to keep
+them for a future installation; a pre-confirmation `layout.json` may also exist
+as the schema-v1 recovery backup.
 
 ## Migrating from the development clone
 
@@ -112,14 +166,18 @@ resolution recommendation; otherwise the highest advertised mode is used.
 ```
 
 The command validates the manifest, shell scripts, QML, package structure,
-layout transaction behavior, EDID cache behavior, and layout model logic.
+layout transaction behavior, EDID cache behavior, and layout model logic. The
+14-scenario evidence map and manual-hardware boundary are recorded in
+[docs/acceptance-matrix.md](docs/acceptance-matrix.md).
 
 ## Security
 
 Monitor Studio launches local system commands and changes the live Hyprland
 display configuration. It performs no network downloads and does not use
 `sudo` or `pkexec`. Monitor names and JSON payloads are validated before they
-are translated into Hyprland Lua statements. See [SECURITY.md](SECURITY.md) and
+are translated into Hyprland Lua statements. EDID make, model, description,
+serial, and connector text is treated as untrusted and rendered as plain text;
+profile state stays in the local user state directory. See [SECURITY.md](SECURITY.md) and
 [docs/security-and-operations.md](docs/security-and-operations.md) for the
 complete boundary and recovery model.
 

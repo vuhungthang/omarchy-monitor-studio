@@ -1,10 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Ui
 import qs.Commons
 import "Model.js" as Model
+import "TopologyModel.js" as Topology
+import "DisplayEventModel.js" as DisplayEvents
 
 Panel {
   id: root
@@ -37,7 +40,7 @@ Panel {
   property bool workspaceAssignmentsManaged: false
   readonly property bool workspaceDirty: !Model.workspaceAssignmentsEqual(
     workspaceAssignmentsActual, stagedWorkspaceAssignments)
-  readonly property bool layoutDirty: arrangementDirty || settingsDirty || workspaceDirty
+  readonly property bool layoutDirty: arrangementDirty || settingsDirty || workspaceDirty || anchorDirty
   readonly property var workspaceNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   property string expandedSettingsSection: ""
   property bool layoutDragging: false
@@ -51,6 +54,58 @@ Panel {
   property bool arrangementEditing: false
   property bool expandedLayoutOpen: false
   property string layoutError: ""
+  property var displayEventState: DisplayEvents.initialState("")
+  property bool displayTransitioning: false
+  property bool staleCancellationRequested: false
+  property bool stateRefreshQueued: false
+  property string stateRefreshQueuedReason: ""
+  property bool stateProcHotplugScan: false
+  property bool identifyActive: false
+  property string confirmationScreenName: ""
+  property int confirmationWorkspaceId: 0
+  readonly property var confirmationAvailableScreens: {
+    var names = []
+    for (var i = 0; i < Quickshell.screens.length; i++) {
+      var candidate = Quickshell.screens[i]
+      if (candidate && candidate.name) names.push(String(candidate.name))
+    }
+    return names
+  }
+  readonly property string confirmationWorkspaceScreenName: {
+    if (confirmationWorkspaceId <= 0) return ""
+    var monitors = Hyprland.monitors.values
+    for (var i = 0; i < monitors.length; i++) {
+      var monitor = monitors[i]
+      if (monitor && monitor.activeWorkspace
+          && Number(monitor.activeWorkspace.id) === confirmationWorkspaceId)
+        return String(monitor.name || "")
+    }
+    return ""
+  }
+  readonly property string confirmationFocusedScreenName:
+    Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name || "") : ""
+  readonly property string confirmationTargetScreenName:
+    Model.confirmationTargetScreen(
+      confirmationScreenName, confirmationWorkspaceScreenName,
+      confirmationFocusedScreenName, confirmationAvailableScreens)
+  readonly property bool ownsDisplayConfirmation: Model.ownsDisplayConfirmation(
+    panel.screen ? String(panel.screen.name || "") : "",
+    confirmationScreenName, confirmationWorkspaceScreenName,
+    confirmationFocusedScreenName, confirmationAvailableScreens)
+  property var profiles: []
+  property string activeProfileId: ""
+  property var activeTopologyVariants: ({})
+  property string anchorDisplayName: ""
+  property string storedAnchorDisplayName: ""
+  property bool anchorDirty: false
+  property var profileMatch: ({ status: "new", profileId: "", matches: [] })
+  property bool profileSectionOpen: false
+  property bool profileActionBusy: false
+  property string pendingProfileDeleteId: ""
+  readonly property bool profileKeepBlocked: {
+    var status = String((profileMatch || {}).status || "new")
+    return status === "moved" || status === "weak" || status === "ambiguous"
+  }
   readonly property real layoutPadding: Style.space(10)
   readonly property real expandedLayoutPadding: Style.space(24)
   readonly property int layoutConfirmationDuration: 15
@@ -74,6 +129,23 @@ Panel {
   }
   readonly property var previewDisplays: Model.displaysWithSettings(
     displays, stagedDisplaySettings)
+  readonly property var anchorOptions: {
+    var result = []
+    for (var i = 0; i < displays.length; i++) {
+      var display = displays[i]
+      if (display && display.enabled)
+        result.push({ value: display.name, label: display.name })
+    }
+    return result
+  }
+  readonly property var identifyEntries: DisplayEvents.identifyEntries(displays)
+  readonly property var duplicatePlan: Topology.prepareDuplicatePreview(
+    displays, stagedDisplaySettings, anchorDisplayName)
+  readonly property string currentTopologyPreset: Topology.isDuplicateTopology(previewDisplays)
+    ? "duplicate" : Topology.currentPreset(previewDisplays)
+  readonly property bool internalPresetAvailable: Topology.presetAvailable(displays, "internal")
+  readonly property bool externalPresetAvailable: Topology.presetAvailable(displays, "external")
+  readonly property bool extendPresetAvailable: Topology.presetAvailable(displays, "extend")
   readonly property var selectedDisplayPreview: {
     for (var i = 0; i < previewDisplays.length; i++) {
       if (previewDisplays[i] && previewDisplays[i].name === selectedMonitorName)
@@ -151,6 +223,7 @@ Panel {
     var list = []
     if (brightnessAvailable) list.push("brightness")
     list.push("textsize")
+    if (displays.length > 1) list.push("presets")
     if (enabledDisplayCount > 1) list.push("arrangement")
     if (expandedSettingsSection === "workspaces" && selectedDisplay)
       list.push("workspaces")
@@ -160,8 +233,10 @@ Panel {
       if (refreshRateOptions.length > 0) list.push("refreshRate")
       list.push("scale")
     }
-    if (expandedSettingsSection === "monitors" && displays.length > 1)
+    if (expandedSettingsSection === "monitors" && displays.length > 0) {
+      list.push("displayActions")
       list.push("monitors")
+    }
     return list
   }
 
@@ -174,6 +249,8 @@ Panel {
     if (section === "rotation") return 0
     if (section === "refreshRate") return 0
     if (section === "scale") return scaleValues.length
+    if (section === "presets") return 4
+    if (section === "displayActions") return 2
     if (section === "monitors") return displays.length
     return 0
   }
@@ -183,6 +260,7 @@ Panel {
     return section === "brightness" || section === "textsize"
       || section === "workspaces" || section === "resolution" || section === "scale"
       || section === "rotation" || section === "refreshRate"
+      || section === "displayActions" || section === "presets"
   }
 
   function sectionFirstIndex(section) {
@@ -225,8 +303,11 @@ Panel {
   // h/l walks horizontal option rows. Sliders handle horizontal movement
   // separately through their adjustment helpers.
   function moveCursorH(delta) {
-    if (focusSection !== "scale" && focusSection !== "workspaces") return
-    var values = focusSection === "workspaces" ? workspaceNumbers : scaleValues
+    if (focusSection !== "scale" && focusSection !== "workspaces"
+        && focusSection !== "displayActions" && focusSection !== "presets") return
+    var values = focusSection === "workspaces" ? workspaceNumbers
+      : (focusSection === "displayActions" ? [0, 1]
+         : (focusSection === "presets" ? [0, 1, 2, 3] : scaleValues))
     var next = selectedIndex + delta
     if (next < 0) next = 0
     if (next > values.length - 1) next = values.length - 1
@@ -271,6 +352,15 @@ Panel {
     }
     if (focusSection === "scale" && selectedIndex >= 0 && selectedIndex < scaleValues.length) {
       setScale(scaleValues[selectedIndex])
+      return
+    }
+    if (focusSection === "displayActions") {
+      if (selectedIndex === 0) showIdentifyOverlay()
+      else if (selectedIndex === 1) refresh("manual")
+      return
+    }
+    if (focusSection === "presets") {
+      applyTopologyPreset(["internal", "extend", "external", "duplicate"][selectedIndex])
       return
     }
     if (focusSection === "monitors" && selectedIndex >= 0 && selectedIndex < displays.length) {
@@ -346,6 +436,9 @@ Panel {
       expandedLayoutOpen: root.expandedLayoutOpen,
       layoutConfirmationPending: root.layoutConfirmationPending,
       layoutConfirmationSeconds: root.layoutConfirmationSeconds,
+      confirmationScreen: root.confirmationScreenName,
+      confirmationWorkspace: root.confirmationWorkspaceId,
+      confirmationTargetScreen: root.confirmationTargetScreenName,
       displays: root.displays
     })
   }
@@ -364,10 +457,111 @@ Panel {
       root.open()
       Qt.callLater(root.openExpandedLayout)
     }
+    function revert(): string {
+      if (emergencyRevertProc.running) return "busy"
+      emergencyRevertProc.command = ["bash", root.pluginScript("apply-layout.sh"),
+                                     "revert-pending"]
+      emergencyRevertProc.running = true
+      return "reverting"
+    }
   }
 
-  function refresh() {
-    if (!stateProc.running) stateProc.running = true
+  function refresh(reason) {
+    var intent = DisplayEvents.refreshIntent(reason)
+    if (stateProc.running) {
+      if (intent.queueIfBusy) {
+        root.stateRefreshQueued = true
+        if (intent.bypassDebounce || !root.stateRefreshQueuedReason)
+          root.stateRefreshQueuedReason = intent.bypassDebounce ? "manual" : "hotplug"
+      }
+      return
+    }
+    if (intent.bypassDebounce) hotplugQuietTimer.stop()
+    root.stateProcHotplugScan = intent.settleTransition
+    stateProc.running = true
+  }
+
+  function showIdentifyOverlay() {
+    if (root.enabledDisplayCount < 1) return
+    root.identifyActive = true
+    identifyTimer.restart()
+  }
+
+  function noteDisplayHardwareEvent() {
+    root.displayEventState = DisplayEvents.noteHardwareEvent(
+      root.displayEventState, Date.now())
+    root.displayTransitioning = root.displayEventState.transitioning
+    hotplugQuietTimer.interval = Math.max(
+      1, root.displayEventState.refreshAt - Date.now())
+    hotplugQuietTimer.restart()
+  }
+
+  function handleMonitorSnapshot(raw) {
+    var snapshot = null
+    try { snapshot = JSON.parse(String(raw || "{}")) } catch (e) {}
+    if (!snapshot || !snapshot.hardwareGeneration) return
+    // A poll that was already in flight when the burst began may contain the
+    // partial dock state. Only the quiet-window scan may settle a transition.
+    if (root.displayEventState.transitioning && !root.stateProcHotplugScan) return
+
+    var settled = DisplayEvents.settleSnapshot(
+      root.displayEventState, snapshot.hardwareGeneration)
+    root.displayEventState = settled.state
+    root.displayTransitioning = settled.state.transitioning
+    if (settled.hardwareChanged && root.layoutConfirmationPending)
+      root.cancelStaleDisplayPreview()
+  }
+
+  function cancelStaleDisplayPreview() {
+    if (!root.layoutConfirmationPending || !root.layoutTransactionId) return
+    if (root.layoutApplying) {
+      root.staleCancellationRequested = true
+      return
+    }
+    root.staleCancellationRequested = false
+    root.layoutProcessAction = "cancel"
+    root.layoutApplying = true
+    root.layoutError = ""
+    layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
+                               "cancel-stale", root.layoutTransactionId]
+    layoutApplyProc.running = true
+  }
+
+  function updateProfiles(raw) {
+    var state = null
+    try { state = JSON.parse(String(raw || "{}")) } catch (e) {}
+    if (!state) return
+    root.profiles = Array.isArray(state.profiles) ? state.profiles : []
+    root.activeProfileId = String(state.activeProfileId || "")
+    root.activeTopologyVariants = state.activeVariants || ({})
+    root.storedAnchorDisplayName = Topology.validAnchor(
+      root.displays, String(state.activeAnchor || ""))
+    if (!root.anchorDirty)
+      root.anchorDisplayName = root.storedAnchorDisplayName
+    root.profileMatch = state.match || ({ status: "new", profileId: "", matches: [] })
+  }
+
+  function selectAnchorDisplay(name) {
+    var selected = Topology.validAnchor(root.displays, String(name || ""))
+    if (!selected || selected === root.anchorDisplayName) return
+    root.anchorDisplayName = selected
+    root.anchorDirty = selected !== root.storedAnchorDisplayName
+    root.layoutError = ""
+  }
+
+  function runProfileAction(action, profileId, value) {
+    if (root.profileActionBusy || !profileId) return
+    var command = ["bash", root.pluginScript("apply-layout.sh"),
+                   "profile-action", action, profileId]
+    if (value !== undefined && value !== null) command.push(String(value))
+    root.profileActionBusy = true
+    profileActionProc.command = command
+    profileActionProc.running = true
+  }
+
+  function requestProfileDelete(profileId) {
+    root.pendingProfileDeleteId = profileId
+    profileDeleteDialog.opened = true
   }
 
   function setBrightness(value) {
@@ -517,6 +711,8 @@ Panel {
     root.arrangementDirty = false
     root.stagedDisplaySettings = ({})
     root.stagedWorkspaceAssignments = root.workspaceAssignmentsActual
+    root.anchorDisplayName = Topology.validAnchor(root.displays, root.storedAnchorDisplayName)
+    root.anchorDirty = false
     root.layoutDragging = false
     root.arrangementEditing = false
     root.layoutError = ""
@@ -609,23 +805,80 @@ Panel {
       root.selectedMonitorName = root.layoutPreview[root.selectedIndex].name
   }
 
-  function beginDisplayPreview(proposed, previous, scope) {
+  function activeWorkspaceForScreen(screenName) {
+    var wanted = String(screenName || "")
+    var monitors = Hyprland.monitors.values
+    for (var i = 0; i < monitors.length; i++) {
+      var monitor = monitors[i]
+      if (!monitor || String(monitor.name || "") !== wanted
+          || !monitor.activeWorkspace) continue
+      var workspace = Math.floor(Number(monitor.activeWorkspace.id))
+      return isFinite(workspace) && workspace > 0 ? workspace : 0
+    }
+    return 0
+  }
+
+  function beginDisplayPreview(proposed, previous, scope, preset, workspaceOverride) {
     if (root.layoutApplying || root.layoutConfirmationPending) return
     if (proposed.length < 1 || previous.length < 1) {
       root.layoutError = "Could not build valid display settings"
       return
     }
+    var anchor = Topology.validAnchor(proposed, root.anchorDisplayName)
+    proposed = Topology.relativeToAnchor(proposed, anchor)
+    root.anchorDisplayName = anchor
     root.layoutTransactionId = "display-" + Date.now()
+    root.confirmationScreenName = panel.screen
+      ? String(panel.screen.name || "") : String(root.focusedMonitor || "")
+    root.confirmationWorkspaceId = root.activeWorkspaceForScreen(
+      root.confirmationScreenName)
     root.layoutProcessAction = "preview"
     root.layoutTransactionScope = scope || "layout"
     root.layoutApplying = true
     root.layoutError = ""
+    var workspaces = workspaceOverride === undefined
+      ? root.workspacePayload() : workspaceOverride
     layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
                                "preview", root.layoutTransactionId,
                                JSON.stringify(proposed), JSON.stringify(previous),
-                               JSON.stringify(root.workspacePayload()),
-                               root.layoutTransactionScope]
+                               JSON.stringify(workspaces),
+                               root.layoutTransactionScope, anchor, String(preset || ""),
+                               root.confirmationScreenName,
+                               String(root.confirmationWorkspaceId)]
     layoutApplyProc.running = true
+  }
+
+  function applyTopologyPreset(preset) {
+    if (root.layoutApplying || root.layoutConfirmationPending) return
+    if (preset === "duplicate") {
+      var duplicate = root.duplicatePlan
+      if (!duplicate.changed || !duplicate.valid) {
+        root.layoutError = duplicate.reason || "Duplicate is unavailable"
+        return
+      }
+      root.anchorDisplayName = duplicate.source
+      root.layoutError = ""
+      root.beginDisplayPreview(
+        duplicate.proposed, duplicate.previous, "topology", "duplicate",
+        Topology.workspacePayloadForPreset(
+          root.workspacePayload(), duplicate.proposed, duplicate.source))
+      return
+    }
+    var transaction = Topology.preparePresetPreview(
+      root.displays, root.stagedDisplaySettings, preset,
+      root.activeTopologyVariants ? root.activeTopologyVariants[preset] : null)
+    if (!transaction.changed || !transaction.valid) {
+      root.layoutError = transaction.reason || "This display preset is unavailable"
+      return
+    }
+    root.anchorDisplayName = Topology.validAnchor(transaction.proposed, transaction.anchor)
+    var workspaces = transaction.restored
+      ? transaction.workspaces
+      : Topology.workspacePayloadForPreset(
+          root.workspacePayload(), transaction.proposed, root.anchorDisplayName)
+    root.layoutError = ""
+    root.beginDisplayPreview(
+      transaction.proposed, transaction.previous, "topology", preset, workspaces)
   }
 
   function recoverDisplayConfirmation(raw) {
@@ -633,6 +886,8 @@ Panel {
     if (!pending) return
     root.layoutTransactionId = pending.id
     root.layoutTransactionScope = pending.scope
+    root.confirmationScreenName = pending.originScreen
+    root.confirmationWorkspaceId = pending.originWorkspace
     root.layoutConfirmationSeconds = pending.remainingSeconds
     root.layoutConfirmationPending = true
     layoutConfirmationTimer.restart()
@@ -641,21 +896,19 @@ Panel {
 
   function applyDisplayLayout() {
     if (!root.layoutDirty || root.layoutApplying || root.layoutConfirmationPending
-        || root.layoutPreview.length < 2) return
+        || root.layoutPreview.length < 1) return
     var canvas = root.activeArrangementCanvas
     if (!canvas) return
-    var proposed = Model.buildDisplayLayoutPayload(
-      root.displays, root.layoutPreview, root.stagedDisplaySettings)
-    var current = Model.fitDisplayLayout(root.displays, canvas.width,
-                                         canvas.height, root.activeLayoutPadding,
-                                         root.activeLayoutUtilization)
-    var previous = Model.buildDisplayLayoutPayload(root.displays, current.items)
+    var positions = Model.normalizeDisplayLayout(root.layoutPreview)
+    var proposed = Topology.withPositions(
+      Topology.buildTopologyPayload(root.displays, root.stagedDisplaySettings), positions)
+    var previous = Topology.buildTopologyPayload(root.displays, {})
     root.beginDisplayPreview(proposed, previous, "layout")
   }
 
   function saveWorkspaceAssignments() {
     if (!root.workspaceDirty || root.layoutApplying || root.layoutConfirmationPending) return
-    var monitors = Model.buildMonitorSettingPayload(root.displays, "", {})
+    var monitors = Topology.buildTopologyPayload(root.previewDisplays, root.stagedDisplaySettings)
     if (monitors.length < 1) {
       root.layoutError = "Could not build current display settings"
       return
@@ -664,17 +917,30 @@ Panel {
     root.layoutError = ""
     workspaceApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
                                   "save-workspaces", JSON.stringify(monitors),
-                                  JSON.stringify(root.stagedWorkspaceAssignments)]
+                                  JSON.stringify(root.stagedWorkspaceAssignments),
+                                  root.anchorDisplayName]
     workspaceApplyProc.running = true
   }
 
-  function keepDisplayLayout() {
+  function keepDisplayLayout(profileChoice, profileId) {
     if (!root.layoutConfirmationPending || root.layoutApplying || !root.layoutTransactionId) return
+    var status = String((root.profileMatch || {}).status || "new")
+    if ((status === "weak" || status === "ambiguous") && !profileChoice) {
+      root.layoutError = "Identify and map uncertain displays before keeping this profile."
+      return
+    }
+    if (status === "moved" && !profileChoice) {
+      root.layoutError = "Choose Update profile or Save as new in Profiles."
+      root.profileSectionOpen = true
+      return
+    }
     root.layoutProcessAction = "keep"
     root.layoutApplying = true
     root.layoutError = ""
     layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
                                "keep", root.layoutTransactionId]
+    if (profileChoice && profileId)
+      layoutApplyProc.command.push(profileChoice, profileId)
     layoutApplyProc.running = true
   }
 
@@ -695,7 +961,8 @@ Panel {
 
   function primaryLayoutAction() {
     if (root.layoutConfirmationPending) root.keepDisplayLayout()
-    else if (root.workspaceDirty && !root.arrangementDirty && !root.settingsDirty)
+    else if (root.workspaceDirty && !root.arrangementDirty && !root.settingsDirty
+             && !root.anchorDirty)
       root.saveWorkspaceAssignments()
     else root.applyDisplayLayout()
   }
@@ -703,9 +970,20 @@ Panel {
   function toggleDisplay(name, enabled) {
     if (!name) return
     if (enabled && root.enabledDisplayCount <= 1) return
+    if (root.layoutApplying || root.layoutConfirmationPending) return
 
-    actionProc.command = ["hyprctl", "keyword", "monitor", name + (enabled ? ",disable" : ",preferred,auto,auto")]
-    if (!actionProc.running) actionProc.running = true
+    var transaction = Topology.prepareTogglePreview(
+      root.previewDisplays, root.stagedDisplaySettings, name)
+    if (!transaction.changed) return
+    if (!transaction.valid) {
+      root.layoutError = transaction.reason
+      return
+    }
+    root.displaySettingsBeforePreview = root.stagedDisplaySettings
+    root.stagedDisplaySettings = transaction.stagedSettings
+    root.layoutError = ""
+    Qt.callLater(root.refitDisplayLayout)
+    root.beginDisplayPreview(transaction.proposed, transaction.previous, "settings")
   }
 
   function setScale(scale) {
@@ -751,7 +1029,10 @@ Panel {
   function stageMonitorSetting(overrides) {
     if (!root.selectedDisplay || root.layoutApplying || root.layoutConfirmationPending) return
     var transaction = Model.prepareDisplaySettingPreview(
-      root.displays, root.stagedDisplaySettings, root.selectedDisplay.name, overrides)
+      root.displays, root.stagedDisplaySettings, root.selectedDisplay.name, overrides,
+      function(displays, staged) {
+        return Topology.buildTopologyPayload(displays, staged)
+      })
     if (!transaction.changed) return
     root.displaySettingsBeforePreview = root.stagedDisplaySettings
     root.stagedDisplaySettings = transaction.stagedSettings
@@ -823,7 +1104,9 @@ Panel {
       cursorActive = false
     } else {
       root.expandedLayoutOpen = false
-      if (layoutConfirmationPending) Qt.callLater(root.revertDisplayLayout)
+      // Keep the transaction alive when the panel is recreated by a monitor
+      // change. The watchdog timer remains the safety fallback; a recovered
+      // panel will reopen and expose Keep/Revert again.
     }
   }
 
@@ -832,12 +1115,42 @@ Panel {
   onScaleValuesChanged: clampCursor()
   onVisibleSectionsChanged: clampCursor()
 
+  // Quickshell screen-list changes are the event-driven fast path. The event
+  // model waits for a 1-second quiet window (3-second maximum) before asking
+  // Hyprland for a stable snapshot. Polling below remains the recovery path
+  // when the host does not emit this signal.
+  Connections {
+    target: Quickshell
+    function onScreensChanged() { root.noteDisplayHardwareEvent() }
+  }
+
+  Timer {
+    id: hotplugQuietTimer
+    interval: DisplayEvents.QUIET_WINDOW_MS
+    repeat: false
+    onTriggered: {
+      if (DisplayEvents.refreshDue(root.displayEventState, Date.now()))
+        root.refresh("hotplug")
+      else if (root.displayEventState.transitioning) {
+        interval = Math.max(1, root.displayEventState.refreshAt - Date.now())
+        restart()
+      }
+    }
+  }
+
+  Timer {
+    id: identifyTimer
+    interval: 5000
+    repeat: false
+    onTriggered: root.identifyActive = false
+  }
+
   // Only poll while the panel is open; the bar glyph tracks monitor count via
   // Quickshell.screens, and open-time refresh + Component.onCompleted cover the
   // rest. External brightness changes are reflected whenever the panel is open.
   Timer {
     interval: 5000
-    running: root.opened
+    running: root.opened || root.layoutConfirmationPending
     repeat: true
     onTriggered: root.refresh()
   }
@@ -862,7 +1175,16 @@ Panel {
         root.updateWorkspaceAssignments(String(lines[8] || "[]").trim(),
                                         String(lines[9] || "[]").trim())
         root.recoverDisplayConfirmation(String(lines[10] || "{}").trim())
+        root.handleMonitorSnapshot(String(lines[11] || "{}").trim())
+        root.updateProfiles(String(lines[12] || "{}").trim())
       }
+    }
+    onRunningChanged: {
+      if (running || !root.stateRefreshQueued) return
+      var queuedReason = root.stateRefreshQueuedReason || "hotplug"
+      root.stateRefreshQueued = false
+      root.stateRefreshQueuedReason = ""
+      Qt.callLater(function() { root.refresh(queuedReason) })
     }
   }
 
@@ -898,6 +1220,24 @@ Panel {
   }
 
   Process {
+    id: emergencyRevertProc
+    stderr: StdioCollector { id: emergencyRevertError; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (exitCode !== 0) {
+        var message = Topology.explainBackendReport(emergencyRevertError.text)
+        root.layoutError = message || "Emergency display revert failed"
+      }
+      root.layoutConfirmationPending = false
+      root.layoutConfirmationSeconds = 0
+      root.layoutTransactionId = ""
+      root.confirmationScreenName = ""
+      root.confirmationWorkspaceId = 0
+      layoutConfirmationTimer.stop()
+      root.refresh("manual")
+    }
+  }
+
+  Process {
     id: restoreLayoutProc
     stderr: StdioCollector { id: restoreLayoutError; waitForEnd: true }
     onExited: function(exitCode) {
@@ -923,22 +1263,41 @@ Panel {
           root.layoutConfirmationSeconds = root.layoutConfirmationDuration
           layoutConfirmationTimer.restart()
           root.refresh()
-          if (!root.opened) Qt.callLater(root.revertDisplayLayout)
+          if (root.staleCancellationRequested)
+            Qt.callLater(root.cancelStaleDisplayPreview)
+          // The compact confirmation overlay is independent of the bar icon,
+          // so close the full menu before per-screen bars are recreated.
+          if (root.opened) Qt.callLater(root.close)
         } else {
           root.stagedDisplaySettings = ({})
           root.displaySettingsBeforePreview = ({})
-          if (completedAction === "keep")
+          if (completedAction === "keep") {
             root.workspaceAssignmentsManaged = Object.keys(root.stagedWorkspaceAssignments).length > 0
+            root.storedAnchorDisplayName = root.anchorDisplayName
+          } else {
+            root.anchorDisplayName = Topology.validAnchor(
+              root.displays, root.storedAnchorDisplayName)
+          }
+          root.anchorDirty = false
           if (root.layoutTransactionScope === "layout") root.arrangementDirty = false
           root.layoutConfirmationPending = false
           root.layoutConfirmationSeconds = 0
           root.layoutTransactionId = ""
           root.layoutTransactionScope = ""
+          root.confirmationScreenName = ""
+          root.confirmationWorkspaceId = 0
           layoutConfirmationTimer.stop()
+          root.staleCancellationRequested = false
+          if (completedAction === "cancel")
+            root.layoutError = "Displays changed. The preview was canceled and the available layout was restored."
+          else if (completedAction === "keep") {
+            var adjustment = Topology.explainBackendReport(layoutApplyError.text)
+            if (adjustment) root.layoutError = adjustment
+          }
           root.refresh()
         }
       } else {
-        var message = String(layoutApplyError.text || "").trim()
+        var message = Topology.explainBackendReport(layoutApplyError.text)
         root.layoutError = message || "Could not apply display layout"
         if (completedAction === "preview") {
           if (root.layoutTransactionScope === "settings") {
@@ -948,6 +1307,8 @@ Panel {
           }
           root.layoutTransactionId = ""
           root.layoutTransactionScope = ""
+          root.confirmationScreenName = ""
+          root.confirmationWorkspaceId = 0
         }
       }
       root.layoutProcessAction = ""
@@ -962,11 +1323,26 @@ Panel {
       if (exitCode === 0) {
         root.workspaceAssignmentsManaged = Object.keys(root.stagedWorkspaceAssignments).length > 0
         root.workspaceAssignmentsActual = root.stagedWorkspaceAssignments
+        root.storedAnchorDisplayName = root.anchorDisplayName
+        root.anchorDirty = false
         root.refresh()
       } else {
         var message = String(workspaceApplyError.text || "").trim()
         root.layoutError = message || "Could not save workspace assignments"
       }
+    }
+  }
+
+  Process {
+    id: profileActionProc
+    stderr: StdioCollector { id: profileActionError; waitForEnd: true }
+    onExited: function(exitCode) {
+      root.profileActionBusy = false
+      if (exitCode !== 0) {
+        var message = String(profileActionError.text || "").trim()
+        root.layoutError = message || "Could not update display profile"
+      }
+      root.refresh()
     }
   }
 
@@ -1053,7 +1429,9 @@ Panel {
         else if (dx !== 0) {
           if (root.focusSection === "brightness") root.adjustBrightness(dx * 5)
           else if (root.focusSection === "textsize") root.adjustTextSize(dx)
-          else if (root.focusSection === "scale" || root.focusSection === "workspaces")
+          else if (root.focusSection === "scale" || root.focusSection === "workspaces"
+                   || root.focusSection === "displayActions"
+                   || root.focusSection === "presets")
             root.moveCursorH(dx)
         }
       }
@@ -1278,6 +1656,30 @@ Panel {
             }
           }
 
+          // ---------- Topology presets ----------
+          PanelSeparator {
+            visible: root.displays.length > 1
+            foreground: root.bar.foreground
+          }
+
+          TopologyPresets {
+            visible: root.displays.length > 1
+            width: parent.width
+            internalAvailable: root.internalPresetAvailable
+            externalAvailable: root.externalPresetAvailable
+            extendAvailable: root.extendPresetAvailable
+            duplicateAvailable: root.duplicatePlan.valid === true
+            duplicateSummary: root.duplicatePlan.summary || "Duplicate is unavailable."
+            currentPreset: root.currentTopologyPreset
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            cursorActive: root.cursorActive
+            focusSection: root.focusSection
+            selectedIndex: root.selectedIndex
+            busy: root.layoutApplying || root.layoutConfirmationPending
+            onPresetRequested: function(preset) { root.applyTopologyPreset(preset) }
+          }
+
           // ---------- Arrangement ----------
           PanelSeparator {
             visible: root.enabledDisplayCount > 1
@@ -1412,6 +1814,7 @@ Panel {
               visible: root.layoutError !== ""
               width: parent.width
               text: root.layoutError
+              textFormat: Text.PlainText
               color: root.bar.urgent
               font.family: root.bar.fontFamily
               font.pixelSize: Style.font.caption
@@ -1452,6 +1855,7 @@ Panel {
                      ? "Keeping…" : "Keep (" + root.layoutConfirmationSeconds + ")")
                   : (root.layoutApplying ? "Applying…" : "Apply")
                 enabled: !root.layoutApplying && (root.layoutConfirmationPending || root.layoutDirty)
+                  && !(root.layoutConfirmationPending && root.profileKeepBlocked)
                 foreground: root.bar.foreground
                 fontFamily: root.bar.fontFamily
                 fontSize: Style.font.caption
@@ -1467,6 +1871,30 @@ Panel {
                 }
               }
             }
+          }
+
+          // ---------- Profiles ----------
+          PanelSeparator { foreground: root.bar.foreground }
+
+          ProfileSection {
+            width: parent.width
+            profiles: root.profiles
+            activeProfileId: root.activeProfileId
+            anchorOptions: root.anchorOptions
+            anchorDisplayName: root.anchorDisplayName
+            match: root.profileMatch
+            busy: root.profileActionBusy
+            confirmationPending: root.layoutConfirmationPending
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            expanded: root.profileSectionOpen
+            onToggleRequested: root.profileSectionOpen = !root.profileSectionOpen
+            onSelectRequested: function(id) { root.runProfileAction("select", id) }
+            onRenameRequested: function(id, name) { root.runProfileAction("rename", id, name) }
+            onDuplicateRequested: function(id, name) { root.runProfileAction("duplicate", id, name) }
+            onDeleteRequested: function(id) { root.requestProfileDelete(id) }
+            onMovedKeepRequested: function(choice, id) { root.keepDisplayLayout(choice, id) }
+            onAnchorRequested: function(name) { root.selectAnchorDisplay(name) }
           }
 
           // ---------- Workspaces ----------
@@ -1691,34 +2119,40 @@ Panel {
 
           // ---------- Monitors ----------
           PanelSeparator {
-            visible: root.displays.length > 1
+            visible: root.displays.length > 0
             foreground: root.bar.foreground
           }
 
-          ExpandableSection {
+          ConnectedDisplaysSection {
             id: monitorsSection
             width: parent.width
-            visible: root.displays.length > 1
-            title: "CONNECTED DISPLAYS"
-            summary: root.enabledDisplayCount + " OF " + root.displays.length + " ACTIVE"
+            visible: root.displays.length > 0
+            displays: root.displays
+            enabledDisplayCount: root.enabledDisplayCount
+            transitioning: root.displayTransitioning
+            busy: root.layoutApplying || stateProc.running
+            identifyActive: root.identifyActive
+            cursorActive: root.cursorActive
+            focusSection: root.focusSection
+            selectedIndex: root.selectedIndex
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
-            contentSpacing: Style.space(10)
             expanded: root.expandedSettingsSection === "monitors"
             onToggleRequested: root.toggleSettingsSection("monitors")
-
-            Repeater {
-              model: root.displays
-
-              MonitorRow {
-                required property var modelData
-                required property int index
-
-                width: panelColumn.width
-                display: modelData
-                rowIndex: index
+            onIdentifyRequested: root.showIdentifyOverlay()
+            onRefreshRequested: root.refresh("manual")
+            onRowHovered: function(index) {
+              if (root.reflowingText) return
+              root.cursorActive = true
+              if (index < 0) {
+                root.focusSection = "displayActions"
+                root.selectedIndex = index === -1 ? 0 : 1
+              } else {
+                root.focusSection = "monitors"
+                root.selectedIndex = index
               }
             }
+            onDisplayToggleRequested: function(name, enabled) { root.toggleDisplay(name, enabled) }
           }
 
           Item {
@@ -1738,6 +2172,44 @@ Panel {
     urgent: root.bar.urgent
     fontFamily: root.bar.fontFamily
     onCloseRequested: root.closeExpandedLayout()
+  }
+
+  IdentifyOverlay {
+    entries: root.identifyEntries
+    displays: root.displays
+    fontFamily: root.bar.fontFamily
+    open: root.identifyActive
+  }
+
+  DisplayConfirmationOverlay {
+    preferredScreenName: root.confirmationTargetScreenName
+    remainingSeconds: root.layoutConfirmationSeconds
+    busy: root.layoutApplying
+    keepEnabled: !root.profileKeepBlocked
+    foreground: root.bar.foreground
+    urgent: root.bar.urgent
+    fontFamily: root.bar.fontFamily
+    open: root.layoutConfirmationPending && root.ownsDisplayConfirmation
+    onKeepRequested: root.keepDisplayLayout()
+    onRevertRequested: root.revertDisplayLayout()
+  }
+
+  ConfirmDialog {
+    id: profileDeleteDialog
+    parent: keyCatcher
+    anchors.fill: parent
+    z: 100
+    message: "Delete this display profile? The live display layout will not change."
+    confirmText: "Delete"
+    onCanceled: {
+      opened = false
+      root.pendingProfileDeleteId = ""
+    }
+    onConfirmed: {
+      opened = false
+      root.runProfileAction("delete", root.pendingProfileDeleteId, "confirmed")
+      root.pendingProfileDeleteId = ""
+    }
   }
 
   component ScalePill: Button {
@@ -1766,75 +2238,4 @@ Panel {
     }
   }
 
-  component MonitorRow: CursorSurface {
-    id: monitorRow
-    required property var display
-    required property int rowIndex
-
-    readonly property bool isFocused: display && display.focused
-    readonly property bool canToggle: display && (!display.enabled || root.enabledDisplayCount > 1)
-
-    hasCursor: root.cursorActive && root.focusSection === "monitors" && root.selectedIndex === rowIndex
-    onHasCursorChanged: if (hasCursor) root.ensureCursorVisible(monitorRow)
-    current: isFocused
-    foreground: root.bar.foreground
-    fill: Style.hoverFillFor(root.bar.foreground, Color.accent)
-    currentFill: Style.selectedFillFor(root.bar.foreground, Color.accent)
-    implicitHeight: monitorInner.implicitHeight + Style.spacing.xl
-    opacity: canToggle ? 1.0 : 0.45
-
-    Row {
-      id: monitorInner
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
-      anchors.leftMargin: Style.space(6)
-      anchors.rightMargin: Style.space(6)
-      spacing: Style.space(8)
-
-      Text {
-        text: "󰍹"
-        color: root.bar.foreground
-        font.family: root.bar.fontFamily
-        font.pixelSize: Style.font.title
-        width: Style.space(22)
-        horizontalAlignment: Text.AlignHCenter
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      Text {
-        text: Model.displayLabel(monitorRow.display) + " · " + monitorRow.display.name
-          + (monitorRow.display.focused ? " · focused" : "")
-        textFormat: Text.PlainText
-        color: root.bar.foreground
-        font.family: root.bar.fontFamily
-        font.pixelSize: Style.font.body
-        elide: Text.ElideRight
-        width: parent.width - Style.space(22) - Style.space(14) - Style.space(16)
-        anchors.verticalCenter: parent.verticalCenter
-      }
-
-      Text {
-        text: monitorRow.display.enabled ? "󰄬" : ""
-        color: root.bar.foreground
-        font.family: root.bar.fontFamily
-        font.pixelSize: Style.font.subtitle
-        width: Style.space(14)
-        horizontalAlignment: Text.AlignRight
-        anchors.verticalCenter: parent.verticalCenter
-      }
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: monitorRow.canToggle ? Qt.PointingHandCursor : Qt.ArrowCursor
-      onContainsMouseChanged: if (containsMouse && !root.reflowingText) {
-        root.cursorActive = true
-        root.focusSection = "monitors"
-        root.selectedIndex = monitorRow.rowIndex
-      }
-      onClicked: if (monitorRow.canToggle) root.toggleDisplay(monitorRow.display.name, monitorRow.display.enabled)
-    }
-  }
 }

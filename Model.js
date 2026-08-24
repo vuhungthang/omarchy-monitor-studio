@@ -518,7 +518,7 @@ function buildMonitorSettingPayload(displays, targetName, overrides) {
   })
 }
 
-function prepareDisplaySettingPreview(displays, stagedSettings, targetName, overrides) {
+function prepareDisplaySettingPreview(displays, stagedSettings, targetName, overrides, buildPayload) {
   var nextSettings = stageDisplaySettings(displays, stagedSettings, targetName, overrides)
   var targetSettings = nextSettings[targetName]
   if (!targetSettings || Object.keys(targetSettings).length === 0) {
@@ -527,6 +527,15 @@ function prepareDisplaySettingPreview(displays, stagedSettings, targetName, over
       stagedSettings: nextSettings,
       previous: [],
       proposed: []
+    }
+  }
+
+  if (typeof buildPayload === "function") {
+    return {
+      changed: true,
+      stagedSettings: nextSettings,
+      previous: buildPayload(displays, stagedSettings || {}),
+      proposed: buildPayload(displays, nextSettings)
     }
   }
 
@@ -554,12 +563,49 @@ function parsePendingDisplayTransaction(raw) {
   if (!value || typeof value !== "object") return null
   var id = String(value.id || "")
   var scope = String(value.scope || "")
+  var originScreen = String(value.originScreen || "")
+  var originWorkspace = Math.floor(Number(value.originWorkspace || 0))
   var remaining = Math.floor(Number(value.remainingSeconds))
   if (!/^[A-Za-z0-9._-]+$/.test(id)
-      || (scope !== "layout" && scope !== "settings")
+      || (scope !== "layout" && scope !== "settings" && scope !== "topology")
+      || (originScreen !== "" && !/^[A-Za-z0-9._:-]+$/.test(originScreen))
+      || !isFinite(originWorkspace) || originWorkspace < 0
       || !isFinite(remaining) || remaining < 1) return null
 
-  return { id: id, scope: scope, remainingSeconds: remaining }
+  return {
+    id: id,
+    scope: scope,
+    remainingSeconds: remaining,
+    originScreen: originScreen,
+    originWorkspace: originWorkspace
+  }
+}
+
+function confirmationTargetScreen(preferredScreen, workspaceScreen, focusedScreen,
+                                  availableScreens) {
+  var preferred = String(preferredScreen || "")
+  var workspace = String(workspaceScreen || "")
+  var focused = String(focusedScreen || "")
+  var seen = {}
+  var screens = []
+  for (var i = 0; Array.isArray(availableScreens) && i < availableScreens.length; i++) {
+    var name = String(availableScreens[i] || "")
+    if (!name || seen[name]) continue
+    seen[name] = true
+    screens.push(name)
+  }
+  screens.sort()
+  if (preferred && seen[preferred]) return preferred
+  if (workspace && seen[workspace]) return workspace
+  if (focused && seen[focused]) return focused
+  return screens.length > 0 ? screens[0] : ""
+}
+
+function ownsDisplayConfirmation(hostScreen, preferredScreen, workspaceScreen,
+                                 focusedScreen, availableScreens) {
+  var target = confirmationTargetScreen(
+    preferredScreen, workspaceScreen, focusedScreen, availableScreens)
+  return target !== "" && String(hostScreen || "") === target
 }
 
 function workspaceNumber(value, maximum) {
@@ -693,6 +739,8 @@ if (typeof module !== "undefined") {
     prepareDisplaySettingPreview: prepareDisplaySettingPreview,
     advanceDisplayConfirmation: advanceDisplayConfirmation,
     parsePendingDisplayTransaction: parsePendingDisplayTransaction,
+    confirmationTargetScreen: confirmationTargetScreen,
+    ownsDisplayConfirmation: ownsDisplayConfirmation,
     workspaceAssignments: workspaceAssignments,
     workspacesForMonitor: workspacesForMonitor,
     toggleWorkspaceAssignment: toggleWorkspaceAssignment,

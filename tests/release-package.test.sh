@@ -32,6 +32,28 @@ rg -q 'Copyright \(c\) David Heinemeier Hansson' LICENSE
 # countdown would leave its new layoutPreview empty, so recovery must also
 # rebuild the geometry from the applied Hyprland monitor state.
 rg -Uq 'layoutConfirmationTimer\.restart\(\)\n    Qt\.callLater\(root\.refitDisplayLayout\)\n  \}' Panel.qml
+rg -Fq 'function revert(): string' Panel.qml
+rg -q '"revert-pending"' Panel.qml
+rg -q 'omarchy shell omarchy.monitor revert' README.md
+
+for fixture in tests/fixtures/monitors/*.json; do
+  jq -e 'type == "array" and length > 0 and all(.[]; (.name | type == "string" and test("^[A-Za-z0-9._-]+$"))
+    and (.availableModes | type == "array"))' "$fixture" >/dev/null \
+    || { echo "invalid monitor fixture: $fixture" >&2; exit 1; }
+done
+
+test -s docs/hyprland-topology-contract.md
+test -s docs/acceptance-matrix.md
+test -s ProfileSection.qml
+test -s ConnectedDisplaysSection.qml
+test -s IdentifyOverlay.qml
+test -s DisplayConfirmationOverlay.qml
+test -s TopologyPresets.qml
+rg -q 'DisplayConfirmationOverlay' Panel.qml
+rg -q 'keepRequested' DisplayConfirmationOverlay.qml
+rg -q 'revertRequested' DisplayConfirmationOverlay.qml
+rg -q 'schema-v2' README.md
+rg -q 'Pass \(automated' docs/acceptance-matrix.md
 
 if find . -type l -print -quit | grep -q .; then
   echo "release package must not contain symlinks" >&2
