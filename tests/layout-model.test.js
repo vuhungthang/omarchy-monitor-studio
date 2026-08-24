@@ -97,6 +97,26 @@ function display(overrides) {
 }
 
 {
+  const rates = Model.availableRefreshRates([
+    "2560x1440@60.00Hz",
+    "2560x1440@143.97Hz",
+    "2560x1440@120.00Hz",
+    "1920x1080@240.00Hz",
+    "2560x1440@143.97Hz",
+    "not-a-mode"
+  ], 2560, 1440)
+
+  assert.deepEqual(rates, [
+    { value: "143.97", refreshRate: 143.97, label: "143.97 Hz" },
+    { value: "120", refreshRate: 120, label: "120 Hz" },
+    { value: "60", refreshRate: 60, label: "60 Hz" }
+  ])
+  assert.equal(Model.matchingRefreshRateValue(rates, 120), "120")
+  assert.equal(Model.preferredRefreshRate(rates, 120), "120")
+  assert.equal(Model.preferredRefreshRate(rates, 165), "143.97")
+}
+
+{
   const displays = [
     display({ name: "DP-4", x: -1920, y: 0 }),
     display({ name: "eDP-1", width: 2880, height: 1800, scale: 2, x: 0, y: 180 }),
@@ -149,6 +169,20 @@ function display(overrides) {
     previous: [],
     proposed: []
   })
+}
+
+{
+  const displays = [
+    display({ name: "DP-4", width: 2560, height: 1440, refreshRate: 60, scale: 1 }),
+    display({ name: "eDP-1", width: 2880, height: 1800, refreshRate: 60, scale: 2 })
+  ]
+
+  assert.deepEqual(Model.prepareDisplaySettingPreview(displays, {}, "DP-4", {
+    refreshRate: 143.97
+  }).proposed, [
+    { name: "DP-4", x: 0, y: 0, width: 2560, height: 1440, refreshRate: 143.97, scale: 1, transform: 0 },
+    { name: "eDP-1", x: 0, y: 0, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
+  ])
 }
 
 {
