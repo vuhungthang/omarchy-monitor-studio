@@ -8,6 +8,22 @@ the physical desk, and assign numbered workspaces to a monitor.
 The plugin is derived from Omarchy's built-in `omarchy.monitor` panel and keeps
 its brightness, text-size, mirroring, and display-toggle controls.
 
+## Preview
+
+### Bar panel
+
+| Overview and arrangement | Profiles |
+| --- | --- |
+| ![Monitor Studio bar overview with mocked monitor names](preview-bar.png) | ![Monitor Studio profile management](preview-bar-profiles.png) |
+| Workspace assignment | Display settings |
+| ![Monitor Studio workspace assignment](preview-bar-workspaces.png) | ![Monitor Studio resolution, rotation, refresh rate, and scale settings](preview-bar-display-settings.png) |
+| Connected displays | |
+| ![Monitor Studio identify, refresh, and display controls](preview-bar-connected-displays.png) | |
+
+### Full-screen arrangement
+
+![Monitor Studio full-screen arrangement with mocked monitor names](preview.png)
+
 ## Features
 
 - Responsive drag-and-drop arrangement for one, two, three, or many displays
