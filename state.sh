@@ -7,6 +7,7 @@ source "$script_dir/profile-store-lib.sh"
 state_root="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/monitor-studio"
 
 monitors_json=$(hyprctl monitors all -j)
+monitors_json=$(normalize_monitor_mirror_sources "$monitors_json")
 focused_monitor=$(printf '%s\n' "$monitors_json" | jq -r '[.[] | select(.focused == true)][0].name // ""')
 preferred_resolutions='{}'
 
@@ -54,6 +55,8 @@ printf '%s\n' "$monitors_json" | jq -c --argjson preferred "$preferred_resolutio
     make,
     model,
     serial,
+    physicalWidth,
+    physicalHeight,
     availableModes,
     recommendedResolution: ($preferred[.name] // "")
   }]

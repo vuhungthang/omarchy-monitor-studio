@@ -29,6 +29,10 @@ All notable user-visible changes to Monitor Studio will be documented here.
 
 ### Fixed
 
+- Normalize Hyprland's numeric mirror-source IDs before they reach the panel,
+  so Duplicate can reliably return to Extend, Internal only, or External only.
+- Prevent Duplicate on displays with different aspect ratios, where Hyprland's
+  mirror path would stretch or squash the image instead of re-rendering it.
 - Show profile update and save-as-new actions directly in the display
   confirmation overlay when known monitors move connectors, and explain when
   uncertain matches must be identified instead of silently disabling Keep.

@@ -437,12 +437,46 @@ function commonAdvertisedModes(displays) {
   })
 }
 
+function displayAspectRatio(display) {
+  var preferred = String(display && display.recommendedResolution || "")
+    .match(/^(\d+)x(\d+)$/)
+  if (preferred && Number(preferred[2]) > 0)
+    return Number(preferred[1]) / Number(preferred[2])
+
+  var physicalWidth = Number(display && display.physicalWidth)
+  var physicalHeight = Number(display && display.physicalHeight)
+  if (physicalWidth > 0 && physicalHeight > 0) return physicalWidth / physicalHeight
+
+  var modes = parsedAdvertisedModes(display)
+  if (modes.length > 0 && modes[0].height > 0) return modes[0].width / modes[0].height
+  var width = Number(display && display.width)
+  var height = Number(display && display.height)
+  return width > 0 && height > 0 ? width / height : 0
+}
+
+function compatiblePhysicalAspects(displays) {
+  var ratios = (Array.isArray(displays) ? displays : [])
+    .map(displayAspectRatio).filter(function(ratio) { return ratio > 0 })
+  if (ratios.length < 2) return true
+  return ratios.every(function(ratio) {
+    return Math.abs(ratio - ratios[0]) / ratios[0] <= 0.01
+  })
+}
+
 function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
   var group = (Array.isArray(displays) ? displays : []).filter(function(display) {
     return display && display.name
   })
   var previous = buildTopologyPayload(displays, stagedSettings)
   var modes = commonAdvertisedModes(group)
+  if (!compatiblePhysicalAspects(group)) {
+    return {
+      changed: false,
+      valid: false,
+      reason: "The displays have different aspect ratios; Hyprland would stretch or squash the mirrored image.",
+      summary: "Duplicate unavailable: different display aspect ratios would distort the image."
+    }
+  }
   if (group.length < 2 || modes.length === 0) {
     return {
       changed: false,

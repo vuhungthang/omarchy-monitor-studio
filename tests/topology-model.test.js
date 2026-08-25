@@ -193,9 +193,11 @@ assert.equal(unavailableModeVariant.restored, false)
 
 const duplicateDisplays = [
   Object.assign({}, displays[0], {
+    recommendedResolution: "1920x1080",
     availableModes: ["2880x1800@60.00Hz", "1920x1080@60.00Hz", "1280x720@60.00Hz"]
   }),
   Object.assign({}, displays[1], {
+    recommendedResolution: "1920x1080",
     availableModes: ["2560x1440@59.95Hz", "1920x1080@60.00Hz", "1280x720@60.00Hz"]
   })
 ]
@@ -214,6 +216,16 @@ assert.deepEqual(duplicate.proposed.map(record => [record.name, record.mirrorOf 
 assert.equal(Topology.validateTopologyPayload(duplicate.proposed).valid, true)
 assert.equal(Topology.isDuplicateTopology(duplicate.proposed), true)
 assert.equal(Topology.buildTopologyPayload(duplicate.proposed, {})[1].mirrorOf, "eDP-1")
+
+const mismatchedAspectDisplays = duplicateDisplays.map(function(display, index) {
+  return Object.assign({}, display, {
+    recommendedResolution: index === 0 ? "2880x1800" : "1920x1080"
+  })
+})
+const mismatchedAspectDuplicate = Topology.prepareDuplicatePreview(
+  mismatchedAspectDisplays, {}, "eDP-1")
+assert.equal(mismatchedAspectDuplicate.valid, false)
+assert.match(mismatchedAspectDuplicate.reason, /different aspect ratios.*stretch/i)
 
 // Every non-Duplicate preset must remove live mirror relationships, regardless
 // of which display was the Duplicate source.

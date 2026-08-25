@@ -46,9 +46,22 @@ connector_metadata_json() {
   printf ']'
 }
 
+normalize_monitor_mirror_sources() {
+  jq -c '
+    . as $monitors
+    | ($monitors | map(select(.id != null)
+        | {key: (.id | tostring), value: .name}) | from_entries) as $name_by_runtime_id
+    | $monitors | map(
+        if (.mirrorOf // "none") == "none" then .
+        else .mirrorOf = ($name_by_runtime_id[(.mirrorOf | tostring)] // .mirrorOf)
+        end)
+  ' <<<"$1"
+}
+
 snapshot_body_json() {
   local monitors_json="$1"
   local connectors
+  monitors_json=$(normalize_monitor_mirror_sources "$monitors_json") || return 1
   connectors=$(connector_metadata_json)
 
   jq -cn --argjson monitors "$monitors_json" --argjson sysfs "$connectors" '
@@ -67,8 +80,6 @@ snapshot_body_json() {
       });
 
     ($monitors | map(select((.name // "") | test("^[A-Za-z0-9._-]+$")))) as $monitors
-    | ($monitors | map(select(.id != null)
-        | {key: (.id | tostring), value: .name}) | from_entries) as $name_by_runtime_id
     | ($monitors | map(select((.serial // "") != "")) | group_by(.serial)
         | map(select(length == 1) | .[0].serial)) as $trusted_serials
 
@@ -97,8 +108,7 @@ snapshot_body_json() {
             y: (.y // null),
             scale: (.scale // null),
             transform: (.transform // 0),
-            mirrorOf: (if (.mirrorOf // "none") == "none" then null
-              else ($name_by_runtime_id[(.mirrorOf | tostring)] // .mirrorOf) end),
+            mirrorOf: (if (.mirrorOf // "none") == "none" then null else .mirrorOf end),
             focused: (.focused == true)
           }))
       }

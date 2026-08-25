@@ -121,6 +121,8 @@ first confirmed migration, preserve `layout.json` as the recovery copy.
   moved profile deliberately; uncertain profiles cannot be kept automatically.
 - **A mode or Duplicate is unavailable:** choose a mode advertised by every
   affected display. Lower resolution or refresh rate may avoid link/GPU limits.
+  Duplicate is intentionally unavailable when physical aspect ratios differ,
+  because Hyprland would stretch or squash the mirrored image.
 - **The compositor adjusted a result:** Monitor Studio saves the re-enumerated
   result and explains which mode, position, scale, or mirror grouping changed.
 - **The panel became unreachable:** use emergency IPC or wait for the detached
