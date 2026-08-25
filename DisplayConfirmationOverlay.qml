@@ -133,7 +133,7 @@ Item {
             focusable: true
             bordered: true
             selected: true
-            enabled: !root.busy && root.keepEnabled
+            enabled: !root.busy
             foreground: root.foreground
             accent: root.urgent
             fontFamily: root.fontFamily

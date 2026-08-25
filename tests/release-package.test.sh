@@ -52,6 +52,10 @@ test -s TopologyPresets.qml
 rg -q 'DisplayConfirmationOverlay' Panel.qml
 rg -q 'keepRequested' DisplayConfirmationOverlay.qml
 rg -q 'revertRequested' DisplayConfirmationOverlay.qml
+if rg -q 'keepEnabled' DisplayConfirmationOverlay.qml Panel.qml; then
+  echo "display confirmation references removed keepEnabled property" >&2
+  exit 1
+fi
 rg -q 'schema-v2' README.md
 rg -q 'Pass \(automated' docs/acceptance-matrix.md
 
