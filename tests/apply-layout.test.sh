@@ -7,6 +7,7 @@ trap 'rm -rf "$test_root"' EXIT
 
 mkdir -p "$test_root/bin" "$test_root/config/hypr" "$test_root/runtime" "$test_root/state" \
   "$test_root/empty-sysfs"
+chmod 700 "$test_root/runtime"
 source "$(dirname "$0")/lib/fake-hyprctl.sh"
 install_fake_hyprctl "$test_root/bin"
 
@@ -31,8 +32,30 @@ run_layout() {
 
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
+# Runtime transaction state requires a private XDG parent and must never
+# traverse a pre-existing symlink. This also guards the /tmp fallback against
+# another local user redirecting restore locks or transaction files.
+mkdir -p "$test_root/public-runtime"
+chmod 755 "$test_root/public-runtime"
+if XDG_RUNTIME_DIR="$test_root/public-runtime" \
+    XDG_STATE_HOME="$test_root/state" bash "$script" pending; then
+  echo "public XDG runtime directory was accepted" >&2
+  exit 1
+fi
+
+mkdir -p "$test_root/unsafe-runtime" "$test_root/attacker-controlled"
+chmod 700 "$test_root/unsafe-runtime"
+ln -s "$test_root/attacker-controlled" \
+  "$test_root/unsafe-runtime/omarchy-monitor-studio"
+if XDG_RUNTIME_DIR="$test_root/unsafe-runtime" \
+    XDG_STATE_HOME="$test_root/state" bash "$script" pending; then
+  echo "symlinked runtime directory was accepted" >&2
+  exit 1
+fi
+
 # Preview changes the live layout but does not persist it.
 run_layout preview keep-test "$proposed" "$previous" "$workspaces" settings "" "" DP-1 5
+test "$(stat -c '%a' "$test_root/runtime/omarchy-monitor-studio")" = 700
 grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1 }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
 ! grep -F -- 'keyword monitor' "$test_root/hyprctl.log"
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"

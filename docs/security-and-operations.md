@@ -22,7 +22,7 @@ Omarchy/Hyprland commands. It does not elevate privileges or download code.
 | `node ProfileMatcher.js` | Compare normalized connected-display identities with saved profiles |
 
 The scripts also use Bash, Node.js, `jq`, `awk`, `sha256sum`, `readlink`, `head`,
-`mktemp`, `mkdir`, `mv`, `rm`, `rmdir`, `sleep`, and `setsid`.
+`stat`, `chmod`, `mktemp`, `mkdir`, `mv`, `rm`, `rmdir`, `sleep`, and `setsid`.
 
 ## Filesystem writes
 
@@ -34,8 +34,10 @@ The scripts also use Bash, Node.js, `jq`, `awk`, `sha256sum`, `readlink`, `head`
 | `${XDG_STATE_HOME:-~/.local/state}/omarchy/monitor-studio/layout.json` | Legacy schema-v1 layout, retained as a recovery backup after migration | Removed only after the first confirmed v2 Keep; pre-migration files are never deleted without a match |
 
 Writes use private permissions and same-directory temporary files followed by
-atomic rename. The plugin does not edit `monitors.lua`, `hyprland.lua`, shell
-configuration, or package-owned files.
+atomic rename. Runtime paths must be user-owned, non-symlink directories;
+`XDG_RUNTIME_DIR` is additionally required to deny group and other access. The
+plugin does not edit `monitors.lua`, `hyprland.lua`, shell configuration, or
+package-owned files.
 
 ### Schema-v2 profile contents
 

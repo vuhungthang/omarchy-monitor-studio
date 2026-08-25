@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-runtime_root="${XDG_RUNTIME_DIR:-/tmp}/omarchy-monitor-studio"
+runtime_base="${XDG_RUNTIME_DIR:-/tmp}"
+runtime_root="$runtime_base/omarchy-monitor-studio"
 state_root="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/monitor-studio"
 layout_file="$state_root/layout.json"
 script_path=$(readlink -f "$0")
@@ -12,6 +13,46 @@ source "$script_dir/profile-store-lib.sh"
 
 validate_id() {
   [[ ${1:-} =~ ^[A-Za-z0-9._-]+$ ]]
+}
+
+prepare_runtime_root() {
+  local mode
+
+  umask 077
+  if [[ ! -d $runtime_base || -L $runtime_base ]]; then
+    echo "Runtime base is not a trusted directory" >&2
+    return 1
+  fi
+
+  # XDG_RUNTIME_DIR is specified as a private, user-owned directory. Enforce
+  # that contract because it is the parent trust boundary for restore locks
+  # and preview transactions. /tmp is the deliberate compatibility fallback;
+  # its child is validated independently below.
+  if [[ -n ${XDG_RUNTIME_DIR:-} ]]; then
+    [[ -O $runtime_base ]] || {
+      echo "Runtime base is not owned by the current user" >&2
+      return 1
+    }
+    mode=$(stat -c '%a' -- "$runtime_base") || return 1
+    (( (8#$mode & 077) == 0 )) || {
+      echo "Runtime base is accessible by other users" >&2
+      return 1
+    }
+  fi
+
+  if [[ -L $runtime_root ]]; then
+    echo "Runtime directory must not be a symbolic link" >&2
+    return 1
+  elif [[ -e $runtime_root ]]; then
+    [[ -d $runtime_root && -O $runtime_root ]] || {
+      echo "Runtime directory is not owned by the current user" >&2
+      return 1
+    }
+  else
+    mkdir -m 700 -- "$runtime_root" || return 1
+  fi
+
+  chmod 700 -- "$runtime_root"
 }
 
 validate_payload() {
@@ -420,7 +461,6 @@ restore_layout() {
 # transaction. Later callers observe the first caller's applied topology and
 # take the idempotent path above.
 restore_layout_locked() {
-  mkdir -p "$runtime_root"
   (
     flock -x 9
     restore_layout
@@ -537,8 +577,6 @@ preview_layout() {
     return 2
   }
 
-  umask 077
-  mkdir -p "$runtime_root"
   cleanup_expired_transactions
   if has_pending_transaction; then
     echo "A display confirmation is already pending" >&2
@@ -719,6 +757,12 @@ cancel_stale_transaction() {
 }
 
 command=${1:-}
+
+case "$command" in
+  preview|keep|revert|revert-pending|cancel-stale|watchdog|restore|pending)
+    prepare_runtime_root
+    ;;
+esac
 
 case "$command" in
   preview)

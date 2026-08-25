@@ -7,6 +7,7 @@ trap 'rm -rf "$test_root"' EXIT
 
 mkdir -p "$test_root/bin" "$test_root/state" "$test_root/runtime" "$test_root/config/hypr" \
   "$test_root/empty-sysfs"
+chmod 700 "$test_root/runtime"
 source "$(dirname "$0")/lib/fake-hyprctl.sh"
 install_fake_hyprctl "$test_root/bin"
 
@@ -169,7 +170,8 @@ printf '%s' "$monitors_json" >"$test_root/monitors.json"
 # --- Fresh root: mismatched v1 state is never applied or migrated. ---
 mismatch_root=$(mktemp -d)
 printf '%s' '[{"name":"eDP-1","serial":"","width":2880,"height":1800,"refreshRate":60,"x":0,"y":0,"scale":2,"availableModes":["2880x1800@60.00Hz"]}]' >"$test_root/monitors-mismatch.json"
-mkdir -p "$mismatch_root/state/omarchy/monitor-studio"
+mkdir -p "$mismatch_root/runtime" "$mismatch_root/state/omarchy/monitor-studio"
+chmod 700 "$mismatch_root/runtime"
 printf '%s\n' "$v1_layout" >"$mismatch_root/state/omarchy/monitor-studio/layout.json"
 : >"$test_root/hyprctl.log"
 if PATH="$test_root/bin:$PATH" XDG_CONFIG_HOME="$test_root/config" \
@@ -186,7 +188,8 @@ test ! -e "$mismatch_root/state/omarchy/monitor-studio/profiles.json"
 
 # --- Malformed v1 state: no eval, recoverable. ---
 malformed_root=$(mktemp -d)
-mkdir -p "$malformed_root/state/omarchy/monitor-studio"
+mkdir -p "$malformed_root/runtime" "$malformed_root/state/omarchy/monitor-studio"
+chmod 700 "$malformed_root/runtime"
 printf '%s\n' '{"monitors": "not-an-array"}' >"$malformed_root/state/omarchy/monitor-studio/layout.json"
 : >"$test_root/hyprctl.log"
 if PATH="$test_root/bin:$PATH" XDG_CONFIG_HOME="$test_root/config" \
@@ -201,7 +204,8 @@ test -f "$malformed_root/state/omarchy/monitor-studio/layout.json"
 
 # --- Malformed v2 store: no eval, recoverable, backup untouched. ---
 malformed_v2_root=$(mktemp -d)
-mkdir -p "$malformed_v2_root/state/omarchy/monitor-studio"
+mkdir -p "$malformed_v2_root/runtime" "$malformed_v2_root/state/omarchy/monitor-studio"
+chmod 700 "$malformed_v2_root/runtime"
 printf '%s\n' '{"schemaVersion": 3, "profiles": []}' >"$malformed_v2_root/state/omarchy/monitor-studio/profiles.json"
 printf '%s\n' "$v1_layout" >"$malformed_v2_root/state/omarchy/monitor-studio/layout.json"
 : >"$test_root/hyprctl.log"

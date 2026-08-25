@@ -41,6 +41,8 @@ All notable user-visible changes to Monitor Studio will be documented here.
 
 - Render monitor-provided make, model, description, and connector labels as
   plain text, and exclude them from tooltips that use automatic text parsing.
+- Reject symbolic links and foreign-owned runtime paths, and enforce private
+  permissions before creating display transaction or restore-lock files.
 
 ## [1.0.0] - Unreleased
 
