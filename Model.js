@@ -703,6 +703,28 @@ function shouldAutoResetDisplayLayout(state) {
   return !state.dirty && !state.dragging && !state.confirmationPending && !state.applying
 }
 
+function displayConfirmationPolicy(match) {
+  match = match || {}
+  var status = String(match.status || "new")
+  var profileId = String(match.profileId || "")
+
+  if (status === "moved") {
+    return {
+      kind: "choose-profile",
+      profileId: profileId,
+      message: "These displays moved connectors. Update the existing profile or save this layout as a new profile."
+    }
+  }
+  if (status === "weak" || status === "ambiguous") {
+    return {
+      kind: "identify-first",
+      profileId: profileId,
+      message: "Monitor Studio cannot safely match these displays. Revert, then use Identify before applying again."
+    }
+  }
+  return { kind: "keep", profileId: profileId, message: "" }
+}
+
 function nextExpandedSection(current, requested) {
   return String(current || "") === String(requested || "")
     ? "" : String(requested || "")
@@ -746,6 +768,7 @@ if (typeof module !== "undefined") {
     toggleWorkspaceAssignment: toggleWorkspaceAssignment,
     workspaceAssignmentsEqual: workspaceAssignmentsEqual,
     parseDisplays: parseDisplays,
+    displayConfirmationPolicy: displayConfirmationPolicy,
     nextExpandedSection: nextExpandedSection,
     shouldAutoResetDisplayLayout: shouldAutoResetDisplayLayout
   }

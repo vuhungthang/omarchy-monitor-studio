@@ -102,10 +102,8 @@ Panel {
   property bool profileSectionOpen: false
   property bool profileActionBusy: false
   property string pendingProfileDeleteId: ""
-  readonly property bool profileKeepBlocked: {
-    var status = String((profileMatch || {}).status || "new")
-    return status === "moved" || status === "weak" || status === "ambiguous"
-  }
+  readonly property var displayConfirmationPolicy:
+    Model.displayConfirmationPolicy(profileMatch)
   readonly property real layoutPadding: Style.space(10)
   readonly property real expandedLayoutPadding: Style.space(24)
   readonly property int layoutConfirmationDuration: 15
@@ -1851,11 +1849,14 @@ Panel {
               Button {
                 width: parent.cellWidth
                 text: root.layoutConfirmationPending
-                  ? (root.layoutProcessAction === "keep"
-                     ? "Keeping…" : "Keep (" + root.layoutConfirmationSeconds + ")")
+                  ? (root.layoutProcessAction === "keep" ? "Keeping…"
+                     : root.displayConfirmationPolicy.kind === "choose-profile"
+                       ? "Choose in Profiles"
+                       : root.displayConfirmationPolicy.kind === "identify-first"
+                         ? "Identify first"
+                         : "Keep (" + root.layoutConfirmationSeconds + ")")
                   : (root.layoutApplying ? "Applying…" : "Apply")
                 enabled: !root.layoutApplying && (root.layoutConfirmationPending || root.layoutDirty)
-                  && !(root.layoutConfirmationPending && root.profileKeepBlocked)
                 foreground: root.bar.foreground
                 fontFamily: root.bar.fontFamily
                 fontSize: Style.font.caption
@@ -2185,12 +2186,14 @@ Panel {
     preferredScreenName: root.confirmationTargetScreenName
     remainingSeconds: root.layoutConfirmationSeconds
     busy: root.layoutApplying
-    keepEnabled: !root.profileKeepBlocked
+    keepPolicy: root.displayConfirmationPolicy
     foreground: root.bar.foreground
     urgent: root.bar.urgent
     fontFamily: root.bar.fontFamily
     open: root.layoutConfirmationPending && root.ownsDisplayConfirmation
-    onKeepRequested: root.keepDisplayLayout()
+    onKeepRequested: function(profileChoice, profileId) {
+      root.keepDisplayLayout(profileChoice, profileId)
+    }
     onRevertRequested: root.revertDisplayLayout()
   }
 

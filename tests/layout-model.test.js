@@ -17,6 +17,34 @@ function display(overrides) {
 }
 
 {
+  assert.deepEqual(Model.displayConfirmationPolicy({ status: "exact", profileId: "desk" }), {
+    kind: "keep",
+    profileId: "desk",
+    message: ""
+  })
+  assert.deepEqual(Model.displayConfirmationPolicy({ status: "moved", profileId: "desk" }), {
+    kind: "choose-profile",
+    profileId: "desk",
+    message: "These displays moved connectors. Update the existing profile or save this layout as a new profile."
+  })
+  assert.deepEqual(Model.displayConfirmationPolicy({ status: "ambiguous", profileId: "desk" }), {
+    kind: "identify-first",
+    profileId: "desk",
+    message: "Monitor Studio cannot safely match these displays. Revert, then use Identify before applying again."
+  })
+  assert.deepEqual(Model.displayConfirmationPolicy({ status: "weak" }), {
+    kind: "identify-first",
+    profileId: "",
+    message: "Monitor Studio cannot safely match these displays. Revert, then use Identify before applying again."
+  })
+  assert.deepEqual(Model.displayConfirmationPolicy(), {
+    kind: "keep",
+    profileId: "",
+    message: ""
+  })
+}
+
+{
   assert.equal(Model.nextExpandedSection("", "workspaces"), "workspaces")
   assert.equal(Model.nextExpandedSection("workspaces", "display"), "display")
   assert.equal(Model.nextExpandedSection("display", "display"), "")

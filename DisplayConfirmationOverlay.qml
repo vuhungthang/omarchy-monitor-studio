@@ -10,14 +10,18 @@ Item {
   required property string preferredScreenName
   required property int remainingSeconds
   required property bool busy
-  required property bool keepEnabled
+  required property var keepPolicy
   required property color foreground
   required property color urgent
   required property string fontFamily
   property bool open: false
 
-  signal keepRequested()
+  signal keepRequested(string profileChoice, string profileId)
   signal revertRequested()
+
+  readonly property string policyKind: String((keepPolicy || {}).kind || "keep")
+  readonly property string policyProfileId: String((keepPolicy || {}).profileId || "")
+  readonly property string policyMessage: String((keepPolicy || {}).message || "")
 
   function screenNamed(name) {
     var wanted = String(name || "")
@@ -95,8 +99,20 @@ Item {
           wrapMode: Text.Wrap
         }
 
+        Text {
+          width: parent.width
+          visible: root.policyKind !== "keep" && root.policyMessage !== ""
+          text: root.policyMessage
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.Wrap
+        }
+
         Row {
           width: parent.width
+          visible: root.policyKind === "keep"
           spacing: Style.spacing.xs
           readonly property real cellWidth: (width - spacing) / 2
 
@@ -121,8 +137,51 @@ Item {
             foreground: root.foreground
             accent: root.urgent
             fontFamily: root.fontFamily
-            onClicked: root.keepRequested()
+            onClicked: root.keepRequested("", "")
           }
+        }
+
+        Row {
+          width: parent.width
+          visible: root.policyKind === "choose-profile"
+          spacing: Style.spacing.xs
+          readonly property real cellWidth: (width - spacing) / 2
+
+          Button {
+            width: parent.cellWidth
+            text: root.busy ? "Working…" : "Update profile"
+            focusable: true
+            bordered: true
+            selected: true
+            enabled: !root.busy && root.policyProfileId !== ""
+            foreground: root.foreground
+            accent: root.urgent
+            fontFamily: root.fontFamily
+            onClicked: root.keepRequested("update-profile", root.policyProfileId)
+          }
+
+          Button {
+            width: parent.cellWidth
+            text: root.busy ? "Working…" : "Save as new"
+            focusable: true
+            bordered: true
+            enabled: !root.busy && root.policyProfileId !== ""
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onClicked: root.keepRequested("fork-profile", root.policyProfileId)
+          }
+        }
+
+        Button {
+          width: parent.width
+          visible: root.policyKind !== "keep"
+          text: root.busy ? "Working…" : "Revert"
+          focusable: true
+          bordered: true
+          enabled: !root.busy
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: root.revertRequested()
         }
       }
     }

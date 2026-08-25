@@ -29,6 +29,9 @@ All notable user-visible changes to Monitor Studio will be documented here.
 
 ### Fixed
 
+- Show profile update and save-as-new actions directly in the display
+  confirmation overlay when known monitors move connectors, and explain when
+  uncertain matches must be identified instead of silently disabling Keep.
 - Keep the 15-second display confirmation and applied geometry visible when a
   display change recreates the shell's per-screen monitor panel.
 - Clear Duplicate mirroring when switching to Extend, Internal only, or
