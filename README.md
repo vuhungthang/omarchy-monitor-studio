@@ -109,9 +109,11 @@ Kept monitor and workspace settings are stored as validated JSON at:
 
 The plugin reapplies the active profile when its widget loads only after an
 exact connected-set match. It does not edit `~/.config/hypr/monitors.lua` or
-replace unrelated monitor rules. During Keep, Hyprland is reloaded and the
-confirmed state is reapplied, clearing superseded runtime workspace rules
-without a permanent loader in Hyprland configuration.
+replace unrelated monitor rules. During Keep, the confirmed state is
+re-enumerated and repaired through the runtime monitor transaction without a
+full Hyprland reload. Workspace-only saves may reload Hyprland to clear
+superseded runtime workspace rules; no permanent loader is added to the
+Hyprland configuration.
 
 Older schema-v1 state at
 `~/.local/state/omarchy/monitor-studio/layout.json` is retained as a backup and

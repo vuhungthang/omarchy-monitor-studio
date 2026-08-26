@@ -40,6 +40,11 @@ All notable user-visible changes to Monitor Studio will be documented here.
   display change recreates the shell's per-screen monitor panel.
 - Clear Duplicate mirroring when switching to Extend, Internal only, or
   External only, including recovery from previously saved mirrored variants.
+- Recover pending confirmations as soon as a replacement bar widget loads,
+  queue state refreshes instead of dropping them while a read is in flight, and
+  avoid a full Hyprland reload when keeping a display layout.
+- Register the custom monitor IPC handler on one deterministic screen instance,
+  avoiding duplicate-handler races when per-screen bar widgets are rebuilt.
 
 ### Security
 

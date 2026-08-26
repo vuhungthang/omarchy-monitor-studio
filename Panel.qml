@@ -92,6 +92,9 @@ Panel {
     panel.screen ? String(panel.screen.name || "") : "",
     confirmationScreenName, confirmationWorkspaceScreenName,
     confirmationFocusedScreenName, confirmationAvailableScreens)
+  readonly property bool ownsDisplayIpc: Model.ownsDisplayIpc(
+    panel.screen ? String(panel.screen.name || "") : "",
+    confirmationAvailableScreens)
   property var profiles: []
   property string activeProfileId: ""
   property var activeTopologyVariants: ({})
@@ -442,6 +445,7 @@ Panel {
   }
 
   IpcHandler {
+    enabled: root.ownsDisplayIpc
     target: "omarchy.monitor"
 
     function brightness(percent: string): string { return root.brightnessIpc(percent) }
@@ -469,8 +473,14 @@ Panel {
     if (stateProc.running) {
       if (intent.queueIfBusy) {
         root.stateRefreshQueued = true
-        if (intent.bypassDebounce || !root.stateRefreshQueuedReason)
-          root.stateRefreshQueuedReason = intent.bypassDebounce ? "manual" : "hotplug"
+        if (intent.bypassDebounce) {
+          root.stateRefreshQueuedReason = "manual"
+        } else if (intent.settleTransition
+                   && root.stateRefreshQueuedReason !== "manual") {
+          root.stateRefreshQueuedReason = "hotplug"
+        } else if (!root.stateRefreshQueuedReason) {
+          root.stateRefreshQueuedReason = "poll"
+        }
       }
       return
     }
@@ -881,7 +891,7 @@ Panel {
 
   function recoverDisplayConfirmation(raw) {
     var pending = Model.parsePendingDisplayTransaction(raw)
-    if (!pending) return
+    if (!pending) return false
     root.layoutTransactionId = pending.id
     root.layoutTransactionScope = pending.scope
     root.confirmationScreenName = pending.originScreen
@@ -890,6 +900,7 @@ Panel {
     root.layoutConfirmationPending = true
     layoutConfirmationTimer.restart()
     Qt.callLater(root.refitDisplayLayout)
+    return true
   }
 
   function applyDisplayLayout() {
@@ -1082,6 +1093,7 @@ Panel {
   Component.onCompleted: {
     restoreLayoutProc.command = ["bash", root.pluginScript("apply-layout.sh"), "restore"]
     restoreLayoutProc.running = true
+    pendingTransactionProc.running = true
   }
 
   // KeyboardPanel primes focus at open-time, so SUPER-bound IPC summons land
@@ -1179,7 +1191,7 @@ Panel {
     }
     onRunningChanged: {
       if (running || !root.stateRefreshQueued) return
-      var queuedReason = root.stateRefreshQueuedReason || "hotplug"
+      var queuedReason = root.stateRefreshQueuedReason || "poll"
       root.stateRefreshQueued = false
       root.stateRefreshQueuedReason = ""
       Qt.callLater(function() { root.refresh(queuedReason) })
@@ -1244,6 +1256,18 @@ Panel {
         root.layoutError = message || "Could not restore saved display layout"
       }
       root.refresh()
+    }
+  }
+
+  Process {
+    id: pendingTransactionProc
+    command: ["bash", root.pluginScript("apply-layout.sh"), "pending"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var pending = String(text || "{}").trim()
+        if (root.recoverDisplayConfirmation(pending)) root.refresh("manual")
+      }
     }
   }
 

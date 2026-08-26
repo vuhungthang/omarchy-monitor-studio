@@ -31,9 +31,13 @@ rg -q 'Copyright \(c\) David Heinemeier Hansson' LICENSE
 # A screen mode change can recreate the per-screen panel. Recovering only the
 # countdown would leave its new layoutPreview empty, so recovery must also
 # rebuild the geometry from the applied Hyprland monitor state.
-rg -Uq 'layoutConfirmationTimer\.restart\(\)\n    Qt\.callLater\(root\.refitDisplayLayout\)\n  \}' Panel.qml
+rg -q 'function recoverDisplayConfirmation' Panel.qml
+rg -q 'Qt\.callLater\(root\.refitDisplayLayout\)' Panel.qml
 rg -Fq 'function revert(): string' Panel.qml
 rg -q '"revert-pending"' Panel.qml
+rg -q 'pendingTransactionProc\.running = true' Panel.qml
+rg -q 'function ownsDisplayIpc' Model.js
+rg -q 'enabled: root\.ownsDisplayIpc' Panel.qml
 rg -q 'omarchy shell omarchy.monitor revert' README.md
 
 for fixture in tests/fixtures/monitors/*.json; do

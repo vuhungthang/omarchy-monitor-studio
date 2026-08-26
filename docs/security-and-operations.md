@@ -14,7 +14,7 @@ Omarchy/Hyprland commands. It does not elevate privileges or download code.
 | `hyprctl workspaces -j` | Read active workspace placement |
 | `hyprctl workspacerules -j` | Read configured workspace rules |
 | `hyprctl eval` | Preview, restore, and keep monitor/workspace Lua statements |
-| `hyprctl reload` | Clear superseded runtime rules before reapplying kept state |
+| `hyprctl reload` | Clear superseded runtime workspace rules when saving workspace assignments; last-resort mirror recovery |
 | `omarchy-brightness-display` | Read or set focused-display brightness |
 | `omarchy-hyprland-monitor-scaling` | Read the current monitor scale |
 | `omarchy-display-text-size` | Set Omarchy shell and GTK text size |
@@ -81,9 +81,11 @@ labels out of those tooltips and uses trusted static workspace guidance there.
    transaction, and changes only the live monitor layout.
 2. A detached watchdog waits 15 seconds.
 3. **Keep** claims the transaction, atomically saves the confirmed topology
-   into the versioned profile store (schema v2), reloads Hyprland, reapplies
-   saved monitor/workspace state, and removes the transaction. The first
-   confirmed v2 Keep also retires the retained schema-v1 backup.
+   into the versioned profile store (schema v2), repairs any compositor drift
+   through the runtime monitor transaction, reapplies workspace state, and
+   removes the transaction. The first confirmed v2 Keep also retires the
+   retained schema-v1 backup. Workspace-only saves may reload Hyprland to clear
+   superseded runtime workspace rules.
 4. **Revert**, closing the panel, or watchdog expiry claims the transaction,
    reapplies the previous live monitor state, and removes the transaction.
 5. A claim directory prevents Keep and Revert from winning simultaneously.
