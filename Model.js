@@ -608,6 +608,22 @@ function ownsDisplayConfirmation(hostScreen, preferredScreen, workspaceScreen,
   return target !== "" && String(hostScreen || "") === target
 }
 
+function ownsDisplayIpc(hostScreen, availableScreens) {
+  var wanted = String(hostScreen || "")
+  if (!wanted) return false
+
+  var seen = {}
+  var names = []
+  for (var i = 0; Array.isArray(availableScreens) && i < availableScreens.length; i++) {
+    var name = String(availableScreens[i] || "")
+    if (!name || seen[name]) continue
+    seen[name] = true
+    names.push(name)
+  }
+  names.sort()
+  return names.length > 0 && wanted === names[0]
+}
+
 function workspaceNumber(value, maximum) {
   var text = String(value === undefined || value === null ? "" : value).trim()
   if (!/^\d+$/.test(text)) return 0
@@ -763,6 +779,7 @@ if (typeof module !== "undefined") {
     parsePendingDisplayTransaction: parsePendingDisplayTransaction,
     confirmationTargetScreen: confirmationTargetScreen,
     ownsDisplayConfirmation: ownsDisplayConfirmation,
+    ownsDisplayIpc: ownsDisplayIpc,
     workspaceAssignments: workspaceAssignments,
     workspacesForMonitor: workspacesForMonitor,
     toggleWorkspaceAssignment: toggleWorkspaceAssignment,

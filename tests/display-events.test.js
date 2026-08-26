@@ -55,6 +55,7 @@ assert.deepEqual(Events.refreshIntent("manual"), {
   settleTransition: true,
   bypassDebounce: true
 })
+assert.equal(Events.refreshIntent("poll").queueIfBusy, true)
 assert.equal(Events.refreshIntent("poll").bypassDebounce, false)
 
 console.log("display event model tests passed")

@@ -652,11 +652,11 @@ keep_layout() {
   fi
 
   # Preview already applied this topology. Persist it without bouncing through
-  # the fallback config, which would cause a second DRM modeset (especially
-  # visible when keeping Duplicate). Retain reload/reapply as recovery if the
-  # compositor drifted during confirmation.
+  # the fallback config, which would cause a second DRM modeset and recreate
+  # screen-backed shell widgets. If the compositor drifted during confirmation,
+  # repair it with the same runtime transaction instead of a full reload.
   if ! topology_matches_snapshot "$proposed" "$snapshot"; then
-    if ! hyprctl reload >/dev/null || ! apply_payload "$proposed"; then
+    if ! apply_payload "$proposed"; then
       rmdir "$transaction_dir/claim" 2>/dev/null || true
       return 1
     fi

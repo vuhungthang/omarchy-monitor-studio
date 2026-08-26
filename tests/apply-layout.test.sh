@@ -115,18 +115,18 @@ fi
 ! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
-# A failed Keep must not replace the last known-good persistent state.
-failed_proposed='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1}]'
-run_layout preview failed-keep "$failed_proposed" "$previous" '{}'
+# A compositor drift during confirmation is repaired without a full reload.
+drift_proposed='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0}]'
+run_layout preview drift-keep "$drift_proposed" "$previous" '{}'
 # Force live topology away from the preview so Keep must use its recovery
-# reload/reapply path; a failed reload must still preserve persistent state.
+# reapply path. A failed full reload must be irrelevant to display Keep.
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
-if HYPRCTL_FAIL_RELOAD=1 run_layout keep failed-keep; then
-  echo "Keep succeeded after a failed Hyprland reload" >&2
-  exit 1
-fi
-jq -e --argjson monitors "$proposed" '.profiles[0].topology.monitors == $monitors' "$state_file" >/dev/null
-run_layout revert failed-keep
+: >"$test_root/hyprctl.log"
+HYPRCTL_FAIL_RELOAD=1 run_layout keep drift-keep
+! grep -Fx 'reload' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" >/dev/null
+test ! -d "$test_root/runtime/omarchy-monitor-studio/drift-keep"
+jq -e --argjson monitors "$drift_proposed" '.profiles[0].topology.monitors == $monitors' "$state_file" >/dev/null
 
 # Revert restores the previous live geometry without replacing persistence.
 run_layout preview revert-test "$proposed" "$previous" "$workspaces"

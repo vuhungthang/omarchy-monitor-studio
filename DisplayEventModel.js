@@ -70,7 +70,7 @@ function identifyEntries(displays) {
 function refreshIntent(reason) {
   var kind = String(reason || "poll")
   return {
-    queueIfBusy: kind === "manual" || kind === "hotplug",
+    queueIfBusy: true,
     settleTransition: kind === "manual" || kind === "hotplug",
     bypassDebounce: kind === "manual"
   }

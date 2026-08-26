@@ -42,6 +42,10 @@ function display(overrides) {
     profileId: "",
     message: ""
   })
+
+  assert.equal(Model.ownsDisplayIpc("DP-2", ["eDP-1", "DP-2"]), true)
+  assert.equal(Model.ownsDisplayIpc("eDP-1", ["DP-2", "eDP-1", "DP-2"]), false)
+  assert.equal(Model.ownsDisplayIpc("", ["eDP-1"]), false)
 }
 
 {
