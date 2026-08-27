@@ -224,8 +224,8 @@ const mismatchedAspectDisplays = duplicateDisplays.map(function(display, index) 
 })
 const mismatchedAspectDuplicate = Topology.prepareDuplicatePreview(
   mismatchedAspectDisplays, {}, "eDP-1")
-assert.equal(mismatchedAspectDuplicate.valid, false)
-assert.match(mismatchedAspectDuplicate.reason, /different aspect ratios.*stretch/i)
+assert.equal(mismatchedAspectDuplicate.valid, true)
+assert.match(mismatchedAspectDuplicate.summary, /aspect ratios differ/i)
 
 // Every non-Duplicate preset must remove live mirror relationships, regardless
 // of which display was the Duplicate source.
@@ -254,8 +254,9 @@ const noCommonMode = Topology.prepareDuplicatePreview([
   Object.assign({}, duplicateDisplays[0], { availableModes: ["2880x1800@60.00Hz"] }),
   Object.assign({}, duplicateDisplays[1], { availableModes: ["1920x1080@60.00Hz"] })
 ], {}, "eDP-1")
-assert.equal(noCommonMode.valid, false)
-assert.match(noCommonMode.reason, /common advertised mode/)
+assert.equal(noCommonMode.valid, true)
+assert.equal(noCommonMode.proposed[1].mirrorOf, "eDP-1")
+assert.match(noCommonMode.summary, /letterboxing/i)
 
 assert.equal(Topology.transportLabel("displayport"), "DisplayPort")
 assert.equal(Topology.transportLabel("internal"), "Built-in")
