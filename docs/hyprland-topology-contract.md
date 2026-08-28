@@ -31,7 +31,7 @@ derived from this enumeration and are local optimistic-concurrency tokens only.
 | Transform | `transform = 0..7` | Out-of-range rejected | Validation clamps 0–7 |
 | Disable | `hl.monitor({ output = NAME, disabled = true })` | None at compositor level; output leaves the layout and windows migrate | Last-display invariant enforced in the model (never disable the only enabled output); disabled outputs keep appearing in `monitors all` with `disabled: true` so prior settings survive for re-enable |
 | Enable | Full `hl.monitor({ output = NAME, mode, position, scale, ... })` without `disabled` | Mode may be unavailable after re-plug | Revalidation against fresh enumeration before apply |
-| Mirroring | `mirror = SOURCE` on the target output | Heterogeneous panels stretch/squash; no re-render for the mirrored image | Compute common modes from `availableModes`; if none, reject with an actionable reason; disclose compromise before preview |
+| Mirroring | `mirror = SOURCE` on the target output | Heterogeneous panels stretch/squash; no compositor letterboxing or re-render for the mirrored image | Compute common modes from `availableModes` (preferring 16:9 presentation mode when available for mixed aspect ratios); if none, reject with an actionable reason; disclose compromise before preview |
 | Unmirror | Omit `mirror` in the target's full rule | n/a | Exact before-topology restore |
 | Refresh enumeration | Poll `hyprctl monitors all -j` | n/a | Debounce (1 s quiet, 3 s max) plus recovery polling |
 

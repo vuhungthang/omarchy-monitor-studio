@@ -487,95 +487,55 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
   }))
 
   var modes = commonAdvertisedModes(group)
+  if (modes.length === 0) {
+    return {
+      changed: false,
+      valid: false,
+      reason: "Duplicate needs at least two displays with a common advertised mode",
+      summary: "Duplicate unavailable: no common advertised resolution and refresh rate."
+    }
+  }
+
   var aspectMatch = compatiblePhysicalAspects(group)
-  var proposed
-  var summary = ""
+  var mode = modes[0]
 
   var hasSixteenNine = group.some(function(d) {
     var ratio = displayAspectRatio(d)
     return ratio > 0 && Math.abs(ratio - 16 / 9) <= 0.05
   })
 
-  if (modes.length > 0) {
-    var mode = modes[0]
-    if (!aspectMatch && hasSixteenNine) {
-      var sixteenNineMode = modes.find(function(m) {
-        return Math.abs(m.width / m.height - 16 / 9) <= 0.05
-      })
-      if (sixteenNineMode) mode = sixteenNineMode
+  var isSixteenNinePresentation = false
+  if (!aspectMatch && hasSixteenNine) {
+    var sixteenNineMode = modes.find(function(m) {
+      return Math.abs(m.width / m.height - 16 / 9) <= 0.05
+    })
+    if (sixteenNineMode) {
+      mode = sixteenNineMode
+      isSixteenNinePresentation = true
     }
-    var compromises = group.filter(function(display) {
-      return Number(display.width) !== mode.width || Number(display.height) !== mode.height
-        || Math.abs(Number(display.refreshRate) - mode.refreshRate) > 0.05
-    }).length
-    proposed = orderedGroup.map(function(display) {
-      var record = {
-        name: String(display.name), x: 0, y: 0,
-        width: mode.width, height: mode.height, refreshRate: mode.refreshRate,
-        scale: 1, transform: 0
-      }
-      if (display.name !== source.name) record.mirrorOf = String(source.name)
-      return record
-    })
-    summary = "Duplicate uses " + (aspectMatch ? "" : "16:9 presentation mode ")
-      + mode.width + " × " + mode.height + " @ "
-      + Math.round(mode.refreshRate * 100) / 100 + " Hz"
-      + (aspectMatch ? "" : " (letterboxed on 16:10 display)")
-      + (compromises ? "; " + compromises + " display mode"
-        + (compromises === 1 ? " changes." : "s change.") : ".")
-  } else if (!aspectMatch && hasSixteenNine) {
-    // When no common advertised mode exists and displays differ in aspect ratio,
-    // default to standard 16:9 presentation mode (1920x1080@60) to eliminate stretching
-    // and letterbox cleanly on 16:10 laptop screens for presentations.
-    proposed = orderedGroup.map(function(display) {
-      var prevRecord = null
-      for (var p = 0; p < previous.length; p++) {
-        if (previous[p].name === display.name) {
-          prevRecord = previous[p]
-          break
-        }
-      }
-      var modeScale = prevRecord && prevRecord.scale > 0 ? prevRecord.scale : finiteNumber(display.scale, 1)
-      var modeTransform = prevRecord && prevRecord.transform !== undefined ? prevRecord.transform : cleanTransform(display.transform)
-
-      var record = {
-        name: String(display.name), x: 0, y: 0,
-        width: 1920, height: 1080, refreshRate: 60,
-        scale: modeScale, transform: modeTransform
-      }
-      if (display.name !== source.name) record.mirrorOf = String(source.name)
-      return record
-    })
-    summary = "Duplicate uses 16:9 presentation mode (1920 × 1080 @ 60 Hz) with letterboxing on 16:10 display."
-  } else {
-    proposed = orderedGroup.map(function(display) {
-      var prevRecord = null
-      for (var p = 0; p < previous.length; p++) {
-        if (previous[p].name === display.name) {
-          prevRecord = previous[p]
-          break
-        }
-      }
-      var dispModes = parsedAdvertisedModes(display)
-      var modeWidth = prevRecord && prevRecord.width > 0 ? prevRecord.width : (dispModes.length > 0 ? dispModes[0].width : Math.round(finiteNumber(display.width, 1920)))
-      var modeHeight = prevRecord && prevRecord.height > 0 ? prevRecord.height : (dispModes.length > 0 ? dispModes[0].height : Math.round(finiteNumber(display.height, 1080)))
-      var modeRefresh = prevRecord && prevRecord.refreshRate > 0 ? prevRecord.refreshRate : (dispModes.length > 0 ? dispModes[0].refreshRate : finiteNumber(display.refreshRate, 60))
-      var modeScale = prevRecord && prevRecord.scale > 0 ? prevRecord.scale : finiteNumber(display.scale, 1)
-      var modeTransform = prevRecord && prevRecord.transform !== undefined ? prevRecord.transform : cleanTransform(display.transform)
-
-      var record = {
-        name: String(display.name), x: 0, y: 0,
-        width: modeWidth, height: modeHeight, refreshRate: modeRefresh,
-        scale: modeScale, transform: modeTransform
-      }
-      if (display.name !== source.name) record.mirrorOf = String(source.name)
-      return record
-    })
-    var srcRecord = proposed[0]
-    summary = "Duplicate mirrors " + source.name + " (" + srcRecord.width + " × " + srcRecord.height + ")"
-      + " onto " + orderedGroup.slice(1).map(function(d) { return d.name }).join(", ")
-      + " (aspect ratios differ; letterboxing may occur)."
   }
+
+  var compromises = group.filter(function(display) {
+    return Number(display.width) !== mode.width || Number(display.height) !== mode.height
+      || Math.abs(Number(display.refreshRate) - mode.refreshRate) > 0.05
+  }).length
+
+  var proposed = orderedGroup.map(function(display) {
+    var record = {
+      name: String(display.name), x: 0, y: 0,
+      width: mode.width, height: mode.height, refreshRate: mode.refreshRate,
+      scale: 1, transform: 0
+    }
+    if (display.name !== source.name) record.mirrorOf = String(source.name)
+    return record
+  })
+
+  var summary = "Duplicate uses " + (isSixteenNinePresentation ? "16:9 presentation mode " : "")
+    + mode.width + " × " + mode.height + " @ "
+    + Math.round(mode.refreshRate * 100) / 100 + " Hz"
+    + (!aspectMatch && !isSixteenNinePresentation ? " (aspect ratios differ)" : "")
+    + (compromises ? "; " + compromises + " display mode"
+      + (compromises === 1 ? " changes." : "s change.") : ".")
 
   var validation = validateTopologyPayload(proposed)
   return {
@@ -583,7 +543,7 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
     valid: validation.valid,
     reason: validation.reason,
     source: String(source.name),
-    mode: modes.length > 0 ? modes[0] : null,
+    mode: mode,
     summary: summary,
     proposed: proposed,
     previous: previous
