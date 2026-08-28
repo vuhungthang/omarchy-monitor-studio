@@ -533,7 +533,7 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
   var summary = "Duplicate uses " + (isSixteenNinePresentation ? "16:9 presentation mode " : "")
     + mode.width + " × " + mode.height + " @ "
     + Math.round(mode.refreshRate * 100) / 100 + " Hz"
-    + (!aspectMatch && !isSixteenNinePresentation ? " (aspect ratios differ)" : "")
+    + (!aspectMatch ? " (aspect ratios differ; image may stretch or squash)" : "")
     + (compromises ? "; " + compromises + " display mode"
       + (compromises === 1 ? " changes." : "s change.") : ".")
 

@@ -226,6 +226,7 @@ const mismatchedAspectDuplicate = Topology.prepareDuplicatePreview(
   mismatchedAspectDisplays, {}, "eDP-1")
 assert.equal(mismatchedAspectDuplicate.valid, true)
 assert.match(mismatchedAspectDuplicate.summary, /presentation mode/i)
+assert.match(mismatchedAspectDuplicate.summary, /aspect ratios differ.*stretch or squash/i)
 assert.doesNotMatch(mismatchedAspectDuplicate.summary, /letterbox/i)
 assert.deepEqual(mismatchedAspectDuplicate.mode, { width: 1920, height: 1080, refreshRate: 60 })
 
