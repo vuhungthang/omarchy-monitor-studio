@@ -31,6 +31,8 @@ if [[ $1 == eval ]]; then
     pos=$(sed -n 's/.*position = "\(-\{0,1\}[0-9]*\)x\(-\{0,1\}[0-9]*\)".*/\1 \2/p' <<<"$stmt")
     scale=$(sed -n 's/.*scale = \([0-9.]*\).*/\1/p' <<<"$stmt")
     transform=$(sed -n 's/.*transform = \([0-9]*\).*/\1/p' <<<"$stmt")
+    mirror_provided=false
+    grep -Fq 'mirror = "' <<<"$stmt" && mirror_provided=true
     mirror=$(sed -n 's/.*mirror = "\([^"]*\)".*/\1/p' <<<"$stmt")
     if [[ -n $mirror && ${HYPRCTL_IGNORE_MIRROR:-0} == 1 ]]; then
       mirror=""
@@ -38,14 +40,19 @@ if [[ $1 == eval ]]; then
     if [[ -n $mirror ]]; then
       mirror=$(jq -r --arg n "$mirror" 'map(select(.name == $n))[0].id // "none"' \
         "$HYPRCTL_MONITORS")
+    elif [[ $mirror_provided == true ]]; then
+      mirror=none
     fi
     read -r w h r <<<"$mode"
     read -r x y <<<"$pos"
     jq --arg n "$out" --argjson w "${w:-0}" --argjson h "${h:-0}" --argjson r "${r:-60}" \
        --argjson x "${x:-0}" --argjson y "${y:-0}" --argjson s "${scale:-1}" \
-       --argjson t "${transform:-0}" --arg m "${mirror:-none}" \
+       --argjson t "${transform:-0}" --arg m "${mirror:-}" \
+       --argjson mirrorProvided "$mirror_provided" \
       'map(if .name == $n then .width=$w | .height=$h | .refreshRate=$r | .x=$x | .y=$y
-           | .scale=$s | .transform=$t | .mirrorOf=$m | .disabled=false else . end)' \
+           | .scale=$s | .transform=$t
+           | (if $mirrorProvided then .mirrorOf=$m else . end)
+           | .disabled=false else . end)' \
       "$HYPRCTL_MONITORS" >"$HYPRCTL_MONITORS.tmp" && mv "$HYPRCTL_MONITORS.tmp" "$HYPRCTL_MONITORS"
   done
   exit 0

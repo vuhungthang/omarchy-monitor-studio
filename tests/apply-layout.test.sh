@@ -56,7 +56,7 @@ fi
 # Preview changes the live layout but does not persist it.
 run_layout preview keep-test "$proposed" "$previous" "$workspaces" settings "" "" DP-1 5
 test "$(stat -c '%a' "$test_root/runtime/omarchy-monitor-studio")" = 700
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1 }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1, mirror = "" }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 ! grep -F -- 'keyword monitor' "$test_root/hyprctl.log"
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
 test -f "$test_root/runtime/omarchy-monitor-studio/keep-test/proposed.json"
@@ -131,7 +131,7 @@ jq -e --argjson monitors "$drift_proposed" '.profiles[0].topology.monitors == $m
 # Revert restores the previous live geometry without replacing persistence.
 run_layout preview revert-test "$proposed" "$previous" "$workspaces"
 run_layout revert revert-test
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "1440x0", scale = 1, transform = 0 }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "1440x0", scale = 1, transform = 0, mirror = "" }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 test ! -d "$test_root/runtime/omarchy-monitor-studio/revert-test"
 
 # The watchdog uses the same revert path when confirmation expires.
@@ -176,14 +176,15 @@ fi
 : >"$test_root/hyprctl.log"
 topology='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0},{"name":"eDP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0,"mirrorOf":"DP-1"}]'
 run_layout preview topology-roundtrip "$topology" "$previous" '{}'
-grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0 })' "$test_root/hyprctl.log"
+grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
 test -f "$test_root/runtime/omarchy-monitor-studio/topology-roundtrip/version"
 test -f "$test_root/runtime/omarchy-monitor-studio/topology-roundtrip/base-hardware-generation"
 test -f "$test_root/runtime/omarchy-monitor-studio/topology-roundtrip/base-snapshot-generation"
 run_layout revert topology-roundtrip
 tail -n 1 "$test_root/hyprctl.log" | grep -F -- 'output = "DP-1"' | grep -F -- 'output = "eDP-1"'
-! tail -n 1 "$test_root/hyprctl.log" | grep -F -- 'mirror ='
+test "$(tail -n 1 "$test_root/hyprctl.log" | grep -o 'mirror = ""' | wc -l)" -eq 2
+jq -e 'all(.[]; .mirrorOf == "none")' "$test_root/monitors.json" >/dev/null
 
 # Keeping a Duplicate preview recognizes Hyprland's numeric mirror ID as the
 # proposed connector name and does not reload or reapply the live topology.
@@ -340,7 +341,7 @@ printf '%s' "$monitors_json" >"$test_root/monitors.json"
 : >"$test_root/hyprctl.log"
 disable_payload='[{"name":"DP-1","enabled":false},{"name":"eDP-1","x":0,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0}]'
 run_layout preview staged-disable "$disable_payload" "$proposed" '{}'
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = true }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = true }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 jq -e 'any(.[]; .enabled == false)' \
   "$test_root/runtime/omarchy-monitor-studio/staged-disable/proposed.json" >/dev/null
 run_layout revert staged-disable
@@ -405,7 +406,7 @@ generated_duplicate=$(node -e '
   process.stdout.write(JSON.stringify(plan.proposed));
 ' "$monitors_json")
 run_layout preview cross-layer-duplicate "$generated_duplicate" "$previous" '{}'
-grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0 })' "$test_root/hyprctl.log"
+grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
 run_layout revert cross-layer-duplicate
 

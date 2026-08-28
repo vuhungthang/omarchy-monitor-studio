@@ -104,7 +104,9 @@ apply_payload() {
 
   while IFS=$'\t' read -r name x y width height refresh scale transform mirror; do
     statement="hl.monitor({ output = \"$name\", disabled = false, mode = \"${width}x${height}@${refresh}\", position = \"${x}x${y}\", scale = ${scale}, transform = ${transform}"
-    [[ -z ${mirror:-} ]] || statement+=", mirror = \"$mirror\""
+    # Runtime monitor updates are patch-like: omitting mirror preserves an
+    # existing relationship. Always send the empty value when unmirroring.
+    statement+=", mirror = \"${mirror:-}\""
     statement+=" })"
     if [[ -n ${mirror:-} ]]; then
       [[ -z $mirror_code ]] || mirror_code+="; "

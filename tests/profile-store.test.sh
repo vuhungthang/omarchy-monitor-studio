@@ -37,7 +37,7 @@ printf '%s\n' "$v1_layout" >"$state_dir/layout.json"
 # and keeps the v1 backup until a v2 confirmation.
 : >"$test_root/hyprctl.log"
 run_layout restore
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@60", position = "1440x0", scale = 1, transform = 0 }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@60", position = "1440x0", scale = 1, transform = 0, mirror = "" }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 grep -F 'workspace = "2", monitor = "eDP-1"' "$test_root/hyprctl.log"
 test -f "$state_dir/profiles.json"
 test -f "$state_dir/layout.json"
