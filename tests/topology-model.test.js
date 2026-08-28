@@ -225,7 +225,7 @@ const mismatchedAspectDisplays = duplicateDisplays.map(function(display, index) 
 const mismatchedAspectDuplicate = Topology.prepareDuplicatePreview(
   mismatchedAspectDisplays, {}, "eDP-1")
 assert.equal(mismatchedAspectDuplicate.valid, true)
-assert.match(mismatchedAspectDuplicate.summary, /aspect ratios differ/i)
+assert.match(mismatchedAspectDuplicate.summary, /letterboxed|presentation mode/i)
 
 // Every non-Duplicate preset must remove live mirror relationships, regardless
 // of which display was the Duplicate source.
