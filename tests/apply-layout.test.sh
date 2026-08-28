@@ -393,8 +393,8 @@ run_layout revert unchanged-cancel
 
 # Cross-layer regression test: Duplicate proposal generated from TopologyModel
 # feeds directly into apply-layer mode validation.
-# 1. Mixed-aspect displays with a shared advertised mode generate a valid proposal
-#    that passes apply boundary validation.
+# 1. Mixed-aspect displays preserve their independently advertised native modes
+#    and pass apply boundary validation.
 : >"$test_root/hyprctl.log"
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 generated_duplicate=$(node -e '
@@ -406,12 +406,12 @@ generated_duplicate=$(node -e '
 ' "$monitors_json")
 run_layout preview cross-layer-duplicate "$generated_duplicate" "$previous" '{}'
 grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0 })' "$test_root/hyprctl.log"
-grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
+grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
 run_layout revert cross-layer-duplicate
 
-# 2. Displays with NO common advertised mode: TopologyModel rejects duplicate
-#    planning without generating an unadvertised fallback, and the apply layer
-#    rejects any unadvertised mode proposal.
+# 2. Displays with NO common advertised mode still mirror using each output's
+#    current advertised mode. The apply layer continues to reject an invented,
+#    unadvertised fallback.
 disjoint_monitors='[{"id":0,"name":"DP-1","make":"Test","model":"T1","serial":"SN1","width":1920,"height":1080,"refreshRate":59.95,"x":0,"y":0,"scale":1,"transform":0,"focused":true,"disabled":false,"mirrorOf":"none","availableModes":["1920x1080@59.95Hz"]},{"id":1,"name":"eDP-1","make":"Test","model":"T2","serial":"SN2","width":2880,"height":1800,"refreshRate":60,"x":1920,"y":0,"scale":2,"transform":0,"focused":false,"disabled":false,"mirrorOf":"none","availableModes":["2880x1800@60.00Hz"]}]'
 printf '%s' "$disjoint_monitors" >"$test_root/monitors.json"
 disjoint_plan_valid=$(node -e '
@@ -420,7 +420,18 @@ disjoint_plan_valid=$(node -e '
   const plan = Topology.prepareDuplicatePreview(displays, {}, "DP-1");
   process.stdout.write(plan.valid ? "true" : "false");
 ' "$disjoint_monitors")
-test "$disjoint_plan_valid" = "false"
+test "$disjoint_plan_valid" = "true"
+
+disjoint_duplicate=$(node -e '
+  const Topology = require("./TopologyModel.js");
+  const displays = JSON.parse(process.argv[1]);
+  const plan = Topology.prepareDuplicatePreview(displays, {}, "DP-1");
+  if (!plan.valid) { process.exit(1); }
+  process.stdout.write(JSON.stringify(plan.proposed));
+' "$disjoint_monitors")
+run_layout preview cross-layer-disjoint "$disjoint_duplicate" "$previous" '{}'
+grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
+run_layout revert cross-layer-disjoint
 
 unadvertised_fallback='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0},{"name":"eDP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0,"mirrorOf":"DP-1"}]'
 if run_layout preview cross-layer-unadvertised "$unadvertised_fallback" "$previous" '{}' 2>"$test_root/unadvertised.err"; then

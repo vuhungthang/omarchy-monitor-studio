@@ -486,34 +486,58 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
     return display.name !== source.name
   }))
 
-  var modes = commonAdvertisedModes(group)
-  if (modes.length === 0) {
-    return {
-      changed: false,
-      valid: false,
-      reason: "Duplicate needs at least two displays with a common advertised mode",
-      summary: "Duplicate unavailable: no common advertised resolution and refresh rate."
-    }
-  }
-
   var aspectMatch = compatiblePhysicalAspects(group)
-  var mode = modes[0]
+  var modes = commonAdvertisedModes(group)
+  var useNativeModes = !aspectMatch || modes.length === 0
 
-  var hasSixteenNine = group.some(function(d) {
-    var ratio = displayAspectRatio(d)
-    return ratio > 0 && Math.abs(ratio - 16 / 9) <= 0.05
-  })
-
-  var isSixteenNinePresentation = false
-  if (!aspectMatch && hasSixteenNine) {
-    var sixteenNineMode = modes.find(function(m) {
-      return Math.abs(m.width / m.height - 16 / 9) <= 0.05
+  if (useNativeModes) {
+    var previousByName = {}
+    previous.forEach(function(record) { previousByName[record.name] = record })
+    var nativeModesAdvertised = orderedGroup.every(function(display) {
+      var record = previousByName[display.name] || display
+      return parsedAdvertisedModes(display).some(function(advertised) {
+        return advertised.width === Number(record.width)
+          && advertised.height === Number(record.height)
+          && Math.abs(advertised.refreshRate - Number(record.refreshRate)) <= 0.05
+      })
     })
-    if (sixteenNineMode) {
-      mode = sixteenNineMode
-      isSixteenNinePresentation = true
+    if (!nativeModesAdvertised) {
+      return {
+        changed: false,
+        valid: false,
+        reason: "Duplicate needs each display's current mode to be advertised",
+        summary: "Duplicate unavailable: a current display mode is no longer advertised."
+      }
+    }
+
+    var nativeProposed = orderedGroup.map(function(display) {
+      var current = previousByName[display.name] || display
+      var record = {
+        name: String(display.name), x: 0, y: 0,
+        width: Number(current.width), height: Number(current.height),
+        refreshRate: Number(current.refreshRate), scale: Number(current.scale) || 1,
+        transform: cleanTransform(current.transform)
+      }
+      if (display.name !== source.name) record.mirrorOf = String(source.name)
+      return record
+    })
+    var nativeValidation = validateTopologyPayload(nativeProposed)
+    return {
+      changed: true,
+      valid: nativeValidation.valid,
+      reason: nativeValidation.reason,
+      source: String(source.name),
+      mode: null,
+      summary: "Duplicate uses native display modes"
+        + (!aspectMatch
+          ? "; aspect ratios differ, so the mirrored image may stretch or crop."
+          : "."),
+      proposed: nativeProposed,
+      previous: previous
     }
   }
+
+  var mode = modes[0]
 
   var compromises = group.filter(function(display) {
     return Number(display.width) !== mode.width || Number(display.height) !== mode.height
@@ -530,10 +554,8 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
     return record
   })
 
-  var summary = "Duplicate uses " + (isSixteenNinePresentation ? "16:9 presentation mode " : "")
-    + mode.width + " × " + mode.height + " @ "
+  var summary = "Duplicate uses " + mode.width + " × " + mode.height + " @ "
     + Math.round(mode.refreshRate * 100) / 100 + " Hz"
-    + (!aspectMatch ? " (aspect ratios differ; image may stretch or squash)" : "")
     + (compromises ? "; " + compromises + " display mode"
       + (compromises === 1 ? " changes." : "s change.") : ".")
 

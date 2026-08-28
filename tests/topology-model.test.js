@@ -225,10 +225,17 @@ const mismatchedAspectDisplays = duplicateDisplays.map(function(display, index) 
 const mismatchedAspectDuplicate = Topology.prepareDuplicatePreview(
   mismatchedAspectDisplays, {}, "eDP-1")
 assert.equal(mismatchedAspectDuplicate.valid, true)
-assert.match(mismatchedAspectDuplicate.summary, /presentation mode/i)
-assert.match(mismatchedAspectDuplicate.summary, /aspect ratios differ.*stretch or squash/i)
+assert.match(mismatchedAspectDuplicate.summary, /native display modes/i)
+assert.match(mismatchedAspectDuplicate.summary, /aspect ratios differ.*stretch or crop/i)
 assert.doesNotMatch(mismatchedAspectDuplicate.summary, /letterbox/i)
-assert.deepEqual(mismatchedAspectDuplicate.mode, { width: 1920, height: 1080, refreshRate: 60 })
+assert.equal(mismatchedAspectDuplicate.mode, null)
+assert.deepEqual(mismatchedAspectDuplicate.proposed.map(function(record) {
+  return [record.name, record.width, record.height, record.refreshRate,
+    record.scale, record.mirrorOf || ""]
+}), [
+  ["eDP-1", 2880, 1800, 60, 2, ""],
+  ["DP-1", 1920, 1080, 60, 1, "eDP-1"]
+])
 
 // Every non-Duplicate preset must remove live mirror relationships, regardless
 // of which display was the Duplicate source.
@@ -257,9 +264,12 @@ const noCommonMode = Topology.prepareDuplicatePreview([
   Object.assign({}, duplicateDisplays[0], { availableModes: ["2880x1800@60.00Hz"] }),
   Object.assign({}, duplicateDisplays[1], { availableModes: ["1920x1080@60.00Hz"] })
 ], {}, "eDP-1")
-assert.equal(noCommonMode.valid, false)
-assert.match(noCommonMode.reason, /common advertised mode/)
-assert.match(noCommonMode.summary, /no common advertised resolution/)
+assert.equal(noCommonMode.valid, true)
+assert.equal(noCommonMode.mode, null)
+assert.match(noCommonMode.summary, /native display modes/i)
+assert.deepEqual(noCommonMode.proposed.map(record => [record.width, record.height]), [
+  [2880, 1800], [1920, 1080]
+])
 
 assert.equal(Topology.transportLabel("displayport"), "DisplayPort")
 assert.equal(Topology.transportLabel("internal"), "Built-in")
