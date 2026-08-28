@@ -9,7 +9,19 @@ install_fake_hyprctl() {
   mkdir -p "$bin_dir"
   cat >"$bin_dir/hyprctl" <<'FAKE'
 #!/bin/bash
-if [[ $1 == monitors ]]; then cat "$HYPRCTL_MONITORS"; exit 0; fi
+if [[ $1 == monitors ]]; then
+  if [[ -f $HYPRCTL_MONITORS.pending ]]; then
+    remaining=$(<"$HYPRCTL_MONITORS.pending-polls")
+    if (( remaining <= 1 )); then
+      mv "$HYPRCTL_MONITORS.pending" "$HYPRCTL_MONITORS"
+      rm -f "$HYPRCTL_MONITORS.pending-polls"
+    else
+      printf '%s\n' "$((remaining - 1))" >"$HYPRCTL_MONITORS.pending-polls"
+    fi
+  fi
+  cat "$HYPRCTL_MONITORS"
+  exit 0
+fi
 if [[ $1 == eval ]]; then
   if [[ -n ${HYPRCTL_EVAL_DELAY:-} ]]; then sleep "$HYPRCTL_EVAL_DELAY"; fi
   printf '%s\n' "eval $2" >>"$HYPRCTL_LOG"
@@ -18,6 +30,8 @@ if [[ $1 == eval ]]; then
     exit 1
   fi
   if [[ ${HYPRCTL_IGNORE_EVAL:-0} == 1 ]]; then exit 0; fi
+  before_state=$(mktemp)
+  cp "$HYPRCTL_MONITORS" "$before_state"
   printf '%s\n' "$2" | sed 's/; /\n/g' | while IFS= read -r stmt; do
     grep -q '^hl.monitor(' <<<"$stmt" || continue
     out=$(sed -n 's/.*output = "\([^"]*\)".*/\1/p' <<<"$stmt")
@@ -55,6 +69,14 @@ if [[ $1 == eval ]]; then
            | .disabled=false else . end)' \
       "$HYPRCTL_MONITORS" >"$HYPRCTL_MONITORS.tmp" && mv "$HYPRCTL_MONITORS.tmp" "$HYPRCTL_MONITORS"
   done
+  if [[ ${HYPRCTL_DEFER_UNMIRROR_POLLS:-0} =~ ^[1-9][0-9]*$ ]] \
+      && grep -Fq 'mirror = ""' <<<"$2" \
+      && jq -e 'any(.[]; (.mirrorOf // "none") != "none")' "$before_state" >/dev/null; then
+    mv "$HYPRCTL_MONITORS" "$HYPRCTL_MONITORS.pending"
+    cp "$before_state" "$HYPRCTL_MONITORS"
+    printf '%s\n' "$HYPRCTL_DEFER_UNMIRROR_POLLS" >"$HYPRCTL_MONITORS.pending-polls"
+  fi
+  rm -f "$before_state"
   exit 0
 fi
 printf '%s\n' "$*" >>"$HYPRCTL_LOG"

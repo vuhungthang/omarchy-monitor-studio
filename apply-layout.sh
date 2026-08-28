@@ -286,6 +286,34 @@ mirror_topology_matches_snapshot() {
   ' >/dev/null
 }
 
+# Lua monitor rules are scheduled and applied on a later compositor render
+# pass. `hyprctl eval` returning success therefore does not mean a mirror was
+# already created or removed. Wait for the observable relationship before a
+# transaction is accepted or its restore guard is released.
+wait_for_mirror_topology() {
+  local payload="$1" snapshot="" attempt
+  local attempts="${LAYOUT_SETTLE_ATTEMPTS:-40}"
+  [[ $attempts =~ ^[1-9][0-9]*$ && $attempts -le 100 ]] || attempts=40
+
+  for ((attempt = 0; attempt < attempts; attempt++)); do
+    if snapshot=$(monitor_snapshot 2>/dev/null) \
+        && mirror_topology_matches_snapshot "$payload" "$snapshot"; then
+      printf '%s\n' "$snapshot"
+      return 0
+    fi
+    (( attempt + 1 == attempts )) || sleep 0.05
+  done
+
+  [[ -z $snapshot ]] || printf '%s\n' "$snapshot"
+  return 1
+}
+
+apply_payload_settled() {
+  local payload="$1"
+  apply_payload "$payload" || return 1
+  wait_for_mirror_topology "$payload" >/dev/null
+}
+
 # Build the safest available form of a transaction's before-topology after a
 # hardware change. Settings are restored only when the same connector still
 # advertises the prior mode. New, moved, or mode-changed outputs retain their
@@ -417,14 +445,14 @@ apply_profile_topology() {
     return 2
   }
   if [[ -z $snapshot ]] || ! topology_matches_snapshot "$monitors" "$snapshot"; then
-    apply_payload "$monitors"
+    apply_payload_settled "$monitors"
   fi
   apply_workspace_payload "$workspaces"
 }
 
 restore_layout() {
   local snapshot names store status profile_id profile
-  has_pending_transaction && return 0
+  has_active_transaction && return 0
 
   snapshot=$(monitor_snapshot) || return 2
   names=$(jq -c '[.topology[].name] | sort' <<<"$snapshot")
@@ -492,9 +520,9 @@ cleanup_expired_transactions() {
   done
 }
 
-transaction_is_pending() {
+transaction_is_active() {
   local transaction_dir="$1"
-  [[ -d $transaction_dir && ! -e $transaction_dir/claim \
+  [[ -d $transaction_dir \
     && $(cat "$transaction_dir/version" 2>/dev/null) == 2 \
     && -f $transaction_dir/proposed.json \
     && -f $transaction_dir/previous.json \
@@ -504,6 +532,23 @@ transaction_is_pending() {
     && -f $transaction_dir/base-snapshot-generation \
     && -f $transaction_dir/expires-at \
     && -f $transaction_dir/scope ]]
+}
+
+transaction_is_pending() {
+  local transaction_dir="$1"
+  [[ ! -e $transaction_dir/claim ]] && transaction_is_active "$transaction_dir"
+}
+
+has_active_transaction() {
+  local transaction_dir expires_at now
+  now=$(date +%s)
+  for transaction_dir in "$runtime_root"/*; do
+    transaction_is_active "$transaction_dir" || continue
+    expires_at=$(<"$transaction_dir/expires-at")
+    [[ $expires_at =~ ^[0-9]+$ ]] || continue
+    (( expires_at > now )) && return 0
+  done
+  return 1
 }
 
 has_pending_transaction() {
@@ -612,10 +657,10 @@ preview_layout() {
     return 1
   fi
   local applied_snapshot
-  if ! applied_snapshot=$(monitor_snapshot) \
-      || ! mirror_topology_matches_snapshot "$proposed" "$applied_snapshot"; then
+  if ! applied_snapshot=$(wait_for_mirror_topology "$proposed"); then
     echo "Compositor did not resolve the requested mirror topology; preview reverted" >&2
-    apply_payload "$previous" >/dev/null 2>&1 || hyprctl reload >/dev/null 2>&1 || true
+    apply_payload_settled "$previous" >/dev/null 2>&1 \
+      || hyprctl reload >/dev/null 2>&1 || true
     cleanup_transaction "$transaction_dir"
     trap - RETURN
     return 8
@@ -658,7 +703,7 @@ keep_layout() {
   # screen-backed shell widgets. If the compositor drifted during confirmation,
   # repair it with the same runtime transaction instead of a full reload.
   if ! topology_matches_snapshot "$proposed" "$snapshot"; then
-    if ! apply_payload "$proposed"; then
+    if ! apply_payload_settled "$proposed"; then
       rmdir "$transaction_dir/claim" 2>/dev/null || true
       return 1
     fi
@@ -692,7 +737,7 @@ save_workspace_layout() {
   }
   persist_state "$monitors" "$workspaces" auto "" "$anchor"
   hyprctl reload >/dev/null
-  apply_payload "$monitors"
+  apply_payload_settled "$monitors"
   apply_workspace_payload "$workspaces"
 }
 
@@ -705,7 +750,7 @@ revert_layout() {
   # geometry; they simply cannot be kept.
   local previous
   previous=$(<"$transaction_dir/previous.json")
-  if ! apply_payload "$previous"; then
+  if ! apply_payload_settled "$previous"; then
     rmdir "$transaction_dir/claim" 2>/dev/null || true
     return 1
   fi

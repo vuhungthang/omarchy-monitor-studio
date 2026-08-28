@@ -12,13 +12,17 @@ probe fails at runtime, the degraded behavior in the last column applies.
 |---|---|---|
 | Monitor enumeration | `hyprctl monitors all -j` | Includes disabled outputs (`disabled: true`), mirroring (`mirrorOf`), advertised modes (`availableModes`), EDID make/model/serial, physical size, transform, scale, and logical `x`/`y` |
 | Workspace placement | `hyprctl workspaces -j`, `hyprctl workspacerules -j` | Used for workspace assignment persistence |
-| Runtime configuration | `hyprctl eval "hl.monitor({...})"` | Single-argument Lua; no `hyprctl keyword monitor` (hyprlang is deprecated since 0.55) |
+| Runtime configuration | `hyprctl eval "hl.monitor({...})"` | Single-argument Lua; no `hyprctl keyword monitor` (hyprlang is deprecated since 0.55). Application is scheduled, so success is verified against fresh snapshots. |
 | Workspace rules | `hyprctl eval "hl.workspace_rule({...})"` | Runtime rules; cleared by `hyprctl reload` |
 
 Post-apply reporting always re-enumerates `hyprctl monitors all -j` and
 compares the actual result with the proposal (adjusted positions, compositor
 fallback modes, effective scales). The generations in the snapshot library are
 derived from this enumeration and are local optimistic-concurrency tokens only.
+Monitor Studio polls reported mirror relationships for up to two seconds before
+a preview succeeds or a restore guard is released. This is especially
+important when leaving Duplicate: geometry is not independently meaningful
+until the former follower reports no mirror source.
 
 ## Topology operations
 
