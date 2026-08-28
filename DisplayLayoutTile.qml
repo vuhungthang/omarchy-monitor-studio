@@ -64,10 +64,14 @@ BorderSurface {
 
     Text {
       width: parent.width
-      text: tile.display.name + " · "
+      text: (tile.display.mirrorOf && tile.display.mirrorOf !== "none"
+             ? "󰍺 Mirror of " + tile.display.mirrorOf + " · "
+             : tile.display.name + " · ")
         + Math.round(tile.display.logicalWidth) + " × " + Math.round(tile.display.logicalHeight)
       textFormat: Text.PlainText
-      color: Qt.darker(tile.foreground, 1.35)
+      color: tile.display.mirrorOf && tile.display.mirrorOf !== "none"
+        ? Color.accent
+        : Qt.darker(tile.foreground, 1.35)
       font.family: tile.fontFamily
       font.pixelSize: Style.font.caption
       horizontalAlignment: Text.AlignHCenter

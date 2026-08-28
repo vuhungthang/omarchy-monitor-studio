@@ -114,7 +114,9 @@ ExpandableSection {
           text: Model.displayLabel(monitorRow.modelData) + " · " + monitorRow.modelData.name
             + " · " + Topology.transportLabel(monitorRow.modelData.transport)
             + (root.transitioning ? " · transitioning"
-               : (monitorRow.modelData.enabled ? " · active" : " · disabled"))
+               : (monitorRow.modelData.mirrorOf && monitorRow.modelData.mirrorOf !== "none"
+                  ? " · mirroring " + monitorRow.modelData.mirrorOf
+                  : (monitorRow.modelData.enabled ? " · active" : " · disabled")))
             + (monitorRow.modelData.focused ? " · focused" : "")
           textFormat: Text.PlainText
           color: root.foreground
@@ -126,7 +128,8 @@ ExpandableSection {
         }
 
         Text {
-          text: monitorRow.modelData.enabled ? "󰄬" : "󰅖"
+          text: !monitorRow.modelData.enabled ? "󰅖"
+            : (monitorRow.modelData.mirrorOf && monitorRow.modelData.mirrorOf !== "none" ? "󰍺" : "󰄬")
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.subtitle
