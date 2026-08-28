@@ -24,6 +24,11 @@ Omarchy/Hyprland commands. It does not elevate privileges or download code.
 The scripts also use Bash, Node.js, `jq`, `awk`, `sha256sum`, `readlink`, `head`,
 `stat`, `chmod`, `mktemp`, `mkdir`, `mv`, `rm`, `rmdir`, `sleep`, and `setsid`.
 
+Monitor-rule settlement is bounded to 40 snapshots (two seconds) by default
+and at most 100 snapshots. During that interval, both pending and claimed
+Keep/Revert transactions block recreated shell panels from replaying an older
+saved topology. Expired claims do not block restore.
+
 ## Filesystem writes
 
 | Path | Contents | Lifetime |

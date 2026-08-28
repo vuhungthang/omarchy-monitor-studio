@@ -22,7 +22,7 @@ All notable user-visible changes to Monitor Studio will be documented here.
   Refresh action, and explicit active, disabled, and transitioning status.
 - Internal only, External only, and Extend presets using the same guarded
   preview transaction, with remembered per-profile topology variants.
-- Duplicate mode with advertised-mode intersection, an up-front compatibility
+- Duplicate mode with advertised-mode validation, an up-front compatibility
   summary, and exact rollback to the previous extended or mirrored grouping.
 - Connector transport and structured constraint explanations, including saved
   compositor adjustments, plus an independent emergency-revert IPC command.
@@ -31,8 +31,8 @@ All notable user-visible changes to Monitor Studio will be documented here.
 
 - Normalize Hyprland's numeric mirror-source IDs before they reach the panel,
   so Duplicate can reliably return to Extend, Internal only, or External only.
-- Prevent Duplicate on displays with different aspect ratios, where Hyprland's
-  mirror path would stretch or squash the image instead of re-rendering it.
+- Preserve each display's current advertised mode for mixed-aspect Duplicate,
+  and warn that Hyprland's mirror path may stretch or crop the image.
 - Show profile update and save-as-new actions directly in the display
   confirmation overlay when known monitors move connectors, and explain when
   uncertain matches must be identified instead of silently disabling Keep.

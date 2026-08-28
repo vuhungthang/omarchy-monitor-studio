@@ -137,10 +137,11 @@ first confirmed migration, preserve `layout.json` as the recovery copy.
   Check the cable, dock/KVM, and `hyprctl monitors all -j` if it remains absent.
 - **A profile is moved, weak, or ambiguous:** use **Identify**. Update or fork a
   moved profile deliberately; uncertain profiles cannot be kept automatically.
-- **A mode or Duplicate is unavailable:** choose a mode advertised by every
+- **A mode or Duplicate is unavailable:** choose a mode advertised by the
   affected display. Lower resolution or refresh rate may avoid link/GPU limits.
-  Duplicate is intentionally unavailable when physical aspect ratios differ,
-  because Hyprland would stretch or squash the mirrored image.
+  Duplicate uses a shared advertised mode for matching panels. For mixed-aspect
+  panels it preserves each display's current advertised mode and warns that
+  Hyprland may stretch or crop the mirrored image.
 - **The compositor adjusted a result:** Monitor Studio saves the re-enumerated
   result and explains which mode, position, scale, or mirror grouping changed.
 - **The panel became unreachable:** use emergency IPC or wait for the detached

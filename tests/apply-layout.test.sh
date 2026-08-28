@@ -27,6 +27,7 @@ run_layout() {
   HYPRCTL_MONITORS="$test_root/monitors.json" \
   MONITOR_SYSFS_ROOT="$test_root/empty-sysfs" \
   LAYOUT_WATCHDOG_DISABLED=1 \
+  LAYOUT_SETTLE_ATTEMPTS=4 \
     bash "$script" "$@"
 }
 
@@ -56,7 +57,7 @@ fi
 # Preview changes the live layout but does not persist it.
 run_layout preview keep-test "$proposed" "$previous" "$workspaces" settings "" "" DP-1 5
 test "$(stat -c '%a' "$test_root/runtime/omarchy-monitor-studio")" = 700
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1 }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1, mirror = "" }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 ! grep -F -- 'keyword monitor' "$test_root/hyprctl.log"
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
 test -f "$test_root/runtime/omarchy-monitor-studio/keep-test/proposed.json"
@@ -105,6 +106,28 @@ restore_eval_count=$(grep -c '^eval hl.monitor' "$test_root/hyprctl.log" || true
 test "$restore_eval_count" -eq 0
 grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = true }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = true }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = true })' "$test_root/hyprctl.log"
 
+# A claimed Revert/Keep transaction is still active. Screen recreation during
+# its modeset must not let a replacement panel restore the old saved profile.
+claimed_dir="$test_root/runtime/omarchy-monitor-studio/claimed-restore"
+mkdir -p "$claimed_dir/claim"
+printf '2\n' >"$claimed_dir/version"
+printf '%s\n' "$proposed" >"$claimed_dir/proposed.json"
+printf '%s\n' "$previous" >"$claimed_dir/previous.json"
+printf '%s\n' '{}' >"$claimed_dir/workspaces.json"
+printf '%s\n' '' >"$claimed_dir/anchor.json"
+printf '%s\n' 'deadbeef' >"$claimed_dir/base-hardware-generation"
+printf '%s\n' 'deadbeef' >"$claimed_dir/base-snapshot-generation"
+printf '%s\n' "$(( $(date +%s) + 60 ))" >"$claimed_dir/expires-at"
+printf '%s\n' 'layout' >"$claimed_dir/scope"
+: >"$test_root/hyprctl.log"
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+run_layout restore
+test "$(grep -c '^eval hl.monitor' "$test_root/hyprctl.log" || true)" -eq 0
+printf '1\n' >"$claimed_dir/expires-at"
+run_layout restore
+test "$(grep -c '^eval hl.monitor' "$test_root/hyprctl.log" || true)" -gt 0
+rm -rf "$claimed_dir"
+
 # Restore refuses to apply a profile saved for a different connected set.
 : >"$test_root/hyprctl.log"
 printf '%s' '[{"name":"eDP-1","width":2880,"height":1800,"refreshRate":60,"x":0,"y":0,"scale":2,"availableModes":["2880x1800@60.00Hz"]}]' >"$test_root/monitors.json"
@@ -131,7 +154,7 @@ jq -e --argjson monitors "$drift_proposed" '.profiles[0].topology.monitors == $m
 # Revert restores the previous live geometry without replacing persistence.
 run_layout preview revert-test "$proposed" "$previous" "$workspaces"
 run_layout revert revert-test
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "1440x0", scale = 1, transform = 0 }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "1440x0", scale = 1, transform = 0, mirror = "" }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 test ! -d "$test_root/runtime/omarchy-monitor-studio/revert-test"
 
 # The watchdog uses the same revert path when confirmation expires.
@@ -175,15 +198,37 @@ fi
 # extended grouping rather than leaving either output mirrored.
 : >"$test_root/hyprctl.log"
 topology='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0},{"name":"eDP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0,"mirrorOf":"DP-1"}]'
+
+# Hyprland schedules Lua monitor-rule refreshes for a later render pass. A
+# transition away from Duplicate must wait for the follower to become an
+# independent output instead of immediately rejecting and reapplying Duplicate.
+mirrored_live=$(jq -c '
+  map(if .name == "DP-1" then
+    .x = 0 | .y = 0 | .mirrorOf = "1"
+  else .x = 0 | .y = 0 | .mirrorOf = "none" end)
+' <<<"$monitors_json")
+printf '%s' "$mirrored_live" >"$test_root/monitors.json"
+: >"$test_root/hyprctl.log"
+HYPRCTL_DEFER_UNMIRROR_POLLS=2 run_layout preview deferred-unmirror "$previous" "$topology" '{}'
+test -f "$test_root/runtime/omarchy-monitor-studio/deferred-unmirror/proposed.json"
+jq -e '
+  all(.[]; .mirrorOf == "none") and
+  (map(select(.name == "DP-1"))[0].x == 1440) and
+  (map(select(.name == "eDP-1"))[0].width == 2880)
+' "$test_root/monitors.json" >/dev/null
+run_layout revert deferred-unmirror
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+
 run_layout preview topology-roundtrip "$topology" "$previous" '{}'
-grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0 })' "$test_root/hyprctl.log"
+grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
 test -f "$test_root/runtime/omarchy-monitor-studio/topology-roundtrip/version"
 test -f "$test_root/runtime/omarchy-monitor-studio/topology-roundtrip/base-hardware-generation"
 test -f "$test_root/runtime/omarchy-monitor-studio/topology-roundtrip/base-snapshot-generation"
 run_layout revert topology-roundtrip
 tail -n 1 "$test_root/hyprctl.log" | grep -F -- 'output = "DP-1"' | grep -F -- 'output = "eDP-1"'
-! tail -n 1 "$test_root/hyprctl.log" | grep -F -- 'mirror ='
+test "$(tail -n 1 "$test_root/hyprctl.log" | grep -o 'mirror = ""' | wc -l)" -eq 2
+jq -e 'all(.[]; .mirrorOf == "none")' "$test_root/monitors.json" >/dev/null
 
 # Keeping a Duplicate preview recognizes Hyprland's numeric mirror ID as the
 # proposed connector name and does not reload or reapply the live topology.
@@ -340,7 +385,7 @@ printf '%s' "$monitors_json" >"$test_root/monitors.json"
 : >"$test_root/hyprctl.log"
 disable_payload='[{"name":"DP-1","enabled":false},{"name":"eDP-1","x":0,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0}]'
 run_layout preview staged-disable "$disable_payload" "$proposed" '{}'
-grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = true }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0 })' "$test_root/hyprctl.log"
+grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = true }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
 jq -e 'any(.[]; .enabled == false)' \
   "$test_root/runtime/omarchy-monitor-studio/staged-disable/proposed.json" >/dev/null
 run_layout revert staged-disable
@@ -390,5 +435,56 @@ if run_layout cancel-stale unchanged-cancel; then
 fi
 test -f "$test_root/runtime/omarchy-monitor-studio/unchanged-cancel/proposed.json"
 run_layout revert unchanged-cancel
+
+# Cross-layer regression test: Duplicate proposal generated from TopologyModel
+# feeds directly into apply-layer mode validation.
+# 1. Mixed-aspect displays preserve their independently advertised native modes
+#    and pass apply boundary validation.
+: >"$test_root/hyprctl.log"
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+generated_duplicate=$(node -e '
+  const Topology = require("./TopologyModel.js");
+  const displays = JSON.parse(process.argv[1]);
+  const plan = Topology.prepareDuplicatePreview(displays, {}, "DP-1");
+  if (!plan.valid) { process.exit(1); }
+  process.stdout.write(JSON.stringify(plan.proposed));
+' "$monitors_json")
+run_layout preview cross-layer-duplicate "$generated_duplicate" "$previous" '{}'
+grep -Fx -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x0", scale = 1, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
+grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
+run_layout revert cross-layer-duplicate
+
+# 2. Displays with NO common advertised mode still mirror using each output's
+#    current advertised mode. The apply layer continues to reject an invented,
+#    unadvertised fallback.
+disjoint_monitors='[{"id":0,"name":"DP-1","make":"Test","model":"T1","serial":"SN1","width":1920,"height":1080,"refreshRate":59.95,"x":0,"y":0,"scale":1,"transform":0,"focused":true,"disabled":false,"mirrorOf":"none","availableModes":["1920x1080@59.95Hz"]},{"id":1,"name":"eDP-1","make":"Test","model":"T2","serial":"SN2","width":2880,"height":1800,"refreshRate":60,"x":1920,"y":0,"scale":2,"transform":0,"focused":false,"disabled":false,"mirrorOf":"none","availableModes":["2880x1800@60.00Hz"]}]'
+printf '%s' "$disjoint_monitors" >"$test_root/monitors.json"
+disjoint_plan_valid=$(node -e '
+  const Topology = require("./TopologyModel.js");
+  const displays = JSON.parse(process.argv[1]);
+  const plan = Topology.prepareDuplicatePreview(displays, {}, "DP-1");
+  process.stdout.write(plan.valid ? "true" : "false");
+' "$disjoint_monitors")
+test "$disjoint_plan_valid" = "true"
+
+disjoint_duplicate=$(node -e '
+  const Topology = require("./TopologyModel.js");
+  const displays = JSON.parse(process.argv[1]);
+  const plan = Topology.prepareDuplicatePreview(displays, {}, "DP-1");
+  if (!plan.valid) { process.exit(1); }
+  process.stdout.write(JSON.stringify(plan.proposed));
+' "$disjoint_monitors")
+run_layout preview cross-layer-disjoint "$disjoint_duplicate" "$previous" '{}'
+grep -Fx -- 'eval hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "0x0", scale = 2, transform = 0, mirror = "DP-1" })' "$test_root/hyprctl.log"
+run_layout revert cross-layer-disjoint
+
+unadvertised_fallback='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0},{"name":"eDP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0,"mirrorOf":"DP-1"}]'
+if run_layout preview cross-layer-unadvertised "$unadvertised_fallback" "$previous" '{}' 2>"$test_root/unadvertised.err"; then
+  echo "unadvertised fallback proposal was accepted by apply boundary" >&2
+  exit 1
+fi
+grep -F '"code":"mode-unavailable"' "$test_root/unadvertised.err"
+grep -F 'eDP-1' "$test_root/unadvertised.err"
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
 echo "apply layout transaction tests passed"

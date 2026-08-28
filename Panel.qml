@@ -135,7 +135,10 @@ Panel {
     for (var i = 0; i < displays.length; i++) {
       var display = displays[i]
       if (display && display.enabled)
-        result.push({ value: display.name, label: display.name })
+        result.push({
+          value: display.name,
+          label: display.name + (display.mirrorOf && display.mirrorOf !== "none" ? " (mirroring " + display.mirrorOf + ")" : "")
+        })
     }
     return result
   }
@@ -1517,6 +1520,13 @@ Panel {
               Text {
                 id: heroLabel
                 text: {
+                  var isMirrored = root.currentTopologyPreset === "duplicate" || root.mirrorEnabled
+                    || (Array.isArray(root.displays) && root.displays.some(function(d) { return d && d.mirrorOf && d.mirrorOf !== "none" }))
+                  if (isMirrored) {
+                    return "DUPLICATE · " + (root.brightnessAvailable
+                      ? root.brightnessName(brightnessSlider.dragging ? brightnessSlider.liveValue : root.brightnessPercent).toUpperCase()
+                      : "MIRRORED")
+                  }
                   if (root.brightnessAvailable) {
                     return root.brightnessName(brightnessSlider.dragging ? brightnessSlider.liveValue : root.brightnessPercent).toUpperCase()
                   }
@@ -2003,10 +2013,40 @@ Panel {
             width: parent.width
             visible: root.selectedDisplay
             title: "DISPLAY SETTINGS"
+            summary: root.selectedDisplay
+              ? (root.selectedDisplay.mirrorOf && root.selectedDisplay.mirrorOf !== "none"
+                 ? "MIRRORING " + root.selectedDisplay.mirrorOf
+                 : root.selectedDisplay.name)
+              : ""
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             expanded: root.expandedSettingsSection === "display"
             onToggleRequested: root.toggleSettingsSection("display")
+
+            BorderSurface {
+              visible: root.selectedDisplay && !!root.selectedDisplay.mirrorOf && root.selectedDisplay.mirrorOf !== "none"
+              width: parent.width
+              implicitHeight: mirrorInfoText.implicitHeight + Style.spacing.controlPaddingY * 2
+              color: Style.selectedFillFor(root.bar.foreground, Color.accent)
+              borderSpec: Border.controlSpec("selected", root.bar.foreground, Color.accent)
+              radius: Style.cornerRadius
+
+              Text {
+                id: mirrorInfoText
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.spacing.controlPaddingX
+                anchors.rightMargin: Style.spacing.controlPaddingX
+                text: "󰍺 Mirroring " + (root.selectedDisplay ? root.selectedDisplay.mirrorOf : "") + " (shared framebuffer)"
+                textFormat: Text.PlainText
+                color: root.bar.foreground
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+              }
+            }
 
             PanelSectionHeader {
               width: parent.width

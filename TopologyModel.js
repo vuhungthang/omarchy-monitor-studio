@@ -468,21 +468,12 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
     return display && display.name
   })
   var previous = buildTopologyPayload(displays, stagedSettings)
-  var modes = commonAdvertisedModes(group)
-  if (!compatiblePhysicalAspects(group)) {
+  if (group.length < 2) {
     return {
       changed: false,
       valid: false,
-      reason: "The displays have different aspect ratios; Hyprland would stretch or squash the mirrored image.",
-      summary: "Duplicate unavailable: different display aspect ratios would distort the image."
-    }
-  }
-  if (group.length < 2 || modes.length === 0) {
-    return {
-      changed: false,
-      valid: false,
-      reason: "Duplicate needs at least two displays with a common advertised mode",
-      summary: "Duplicate unavailable: no common advertised resolution and refresh rate."
+      reason: "Duplicate needs at least two displays",
+      summary: "Duplicate unavailable: needs at least two displays."
     }
   }
 
@@ -490,14 +481,69 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
   for (var i = 0; i < group.length; i++) {
     if (group[i].name === requestedSource) source = group[i]
   }
+
+  var orderedGroup = [source].concat(group.filter(function(display) {
+    return display.name !== source.name
+  }))
+
+  var aspectMatch = compatiblePhysicalAspects(group)
+  var modes = commonAdvertisedModes(group)
+  var useNativeModes = !aspectMatch || modes.length === 0
+
+  if (useNativeModes) {
+    var previousByName = {}
+    previous.forEach(function(record) { previousByName[record.name] = record })
+    var nativeModesAdvertised = orderedGroup.every(function(display) {
+      var record = previousByName[display.name] || display
+      return parsedAdvertisedModes(display).some(function(advertised) {
+        return advertised.width === Number(record.width)
+          && advertised.height === Number(record.height)
+          && Math.abs(advertised.refreshRate - Number(record.refreshRate)) <= 0.05
+      })
+    })
+    if (!nativeModesAdvertised) {
+      return {
+        changed: false,
+        valid: false,
+        reason: "Duplicate needs each display's current mode to be advertised",
+        summary: "Duplicate unavailable: a current display mode is no longer advertised."
+      }
+    }
+
+    var nativeProposed = orderedGroup.map(function(display) {
+      var current = previousByName[display.name] || display
+      var record = {
+        name: String(display.name), x: 0, y: 0,
+        width: Number(current.width), height: Number(current.height),
+        refreshRate: Number(current.refreshRate), scale: Number(current.scale) || 1,
+        transform: cleanTransform(current.transform)
+      }
+      if (display.name !== source.name) record.mirrorOf = String(source.name)
+      return record
+    })
+    var nativeValidation = validateTopologyPayload(nativeProposed)
+    return {
+      changed: true,
+      valid: nativeValidation.valid,
+      reason: nativeValidation.reason,
+      source: String(source.name),
+      mode: null,
+      summary: "Duplicate uses native display modes"
+        + (!aspectMatch
+          ? "; aspect ratios differ, so the mirrored image may stretch or crop."
+          : "."),
+      proposed: nativeProposed,
+      previous: previous
+    }
+  }
+
   var mode = modes[0]
+
   var compromises = group.filter(function(display) {
     return Number(display.width) !== mode.width || Number(display.height) !== mode.height
       || Math.abs(Number(display.refreshRate) - mode.refreshRate) > 0.05
   }).length
-  var orderedGroup = [source].concat(group.filter(function(display) {
-    return display.name !== source.name
-  }))
+
   var proposed = orderedGroup.map(function(display) {
     var record = {
       name: String(display.name), x: 0, y: 0,
@@ -507,6 +553,12 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
     if (display.name !== source.name) record.mirrorOf = String(source.name)
     return record
   })
+
+  var summary = "Duplicate uses " + mode.width + " × " + mode.height + " @ "
+    + Math.round(mode.refreshRate * 100) / 100 + " Hz"
+    + (compromises ? "; " + compromises + " display mode"
+      + (compromises === 1 ? " changes." : "s change.") : ".")
+
   var validation = validateTopologyPayload(proposed)
   return {
     changed: true,
@@ -514,10 +566,7 @@ function prepareDuplicatePreview(displays, stagedSettings, requestedSource) {
     reason: validation.reason,
     source: String(source.name),
     mode: mode,
-    summary: "Duplicate uses " + mode.width + " × " + mode.height + " @ "
-      + Math.round(mode.refreshRate * 100) / 100 + " Hz"
-      + (compromises ? "; " + compromises + " display mode"
-        + (compromises === 1 ? " changes." : "s change.") : "."),
+    summary: summary,
     proposed: proposed,
     previous: previous
   }
